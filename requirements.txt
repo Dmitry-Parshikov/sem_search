@@ -10,10 +10,15 @@ transformers>=4.39,<5.0
 qdrant-client>=1.8,<2.0
 rank-bm25>=0.2.2,<0.3
 rapidfuzz>=3.6,<4.0
-# pymorphy2 for Russian lemmatization; if the C-extension (DAWG) fails to
-# build on Windows/Python 3.11+, fall back to pymorphy3 (isolated behind
-# app/lexical/tokenizer.py so the swap needs no changes elsewhere).
-pymorphy2>=0.9.1,<0.10
+# Russian lemmatization. pymorphy2 (0.9.1) installs cleanly on Windows/Python
+# 3.11 but is broken at runtime here: it calls inspect.getargspec, which was
+# removed in Python 3.10+ ("AttributeError: module 'inspect' has no attribute
+# 'getargspec'"). Confirmed by direct test in this environment, so we use the
+# actively maintained fork pymorphy3 instead. The choice is isolated entirely
+# inside app/lexical/tokenizer.py (try pymorphy2, fall back to pymorphy3) so
+# nothing else in the codebase references either package directly.
+pymorphy3>=1.2,<2.0
+pymorphy3-dicts-ru
 
 structlog>=24.1,<25.0
 numpy>=1.26,<3.0

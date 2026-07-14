@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: tests that load real ML models (sentence-transformers, etc.) or are otherwise slow; run with the full `pytest` invocation, skip via `pytest -m \"not slow\"`.",
+]
+
+# NOTE: this file exists solely to hold pytest configuration ([tool.pytest.ini_options]).
+# `requirements.txt` remains the single source of truth for dependencies --
+# this is not a packaging pyproject.toml (no [build-system]/[project] table).

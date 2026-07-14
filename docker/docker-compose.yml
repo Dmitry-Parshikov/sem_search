@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# sem_search — docker-compose production-like setup.
+#
+# Services:
+#   qdrant  — vector database (remote mode)
+#   app     — FastAPI search service
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# The app is configured to use the remote qdrant service via
+# docker/config.yaml (QDRANT__MODE=remote, QDRANT__URL=http://qdrant:6333).
+# ---------------------------------------------------------------------------
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.8
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Override Qdrant to remote mode (the qdrant service above).
+      # Nested delimiter is "__" — see SettingsConfigDict in app/config.py.
+      - SEM_SEARCH_VECTOR_STORE__QDRANT__MODE=remote
+      - SEM_SEARCH_VECTOR_STORE__QDRANT__URL=http://qdrant:6333
+    volumes:
+      - model_cache:/app/.hf_cache
+      - app_data:/app/data
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  model_cache:
+  app_data:

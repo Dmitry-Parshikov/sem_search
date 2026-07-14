@@ -1,0 +1,81 @@
+# Docker config: mirrors config/config.yaml but with remote Qdrant mode,
+# since docker-compose runs a dedicated qdrant service.
+#
+# The app picks this up via SEM_SEARCH__YAML_FILE=config/docker.yaml
+# (set in docker-compose.yml); without that env var it defaults to
+# config/config.yaml (embedded mode, for local dev).
+
+app:
+  name: "sem_search"
+  log_level: "INFO"
+  data_dir: "./data"
+
+embedding:
+  model_name: "intfloat/multilingual-e5-small"
+  device: "cpu"
+  batch_size: 32
+  query_prefix: "query: "
+  passage_prefix: "passage: "
+
+chunking:
+  strategy: "sentence_window"
+  fixed_window:
+    chunk_size: 256
+    overlap: 32
+    unit: "tokens"
+  sentence_window:
+    window_sentences: 3
+    stride_sentences: 2
+  paragraph:
+    min_chars: 0
+
+lexical:
+  use_lemmatization: true
+  match_mode: "lemma"
+  bm25:
+    k1: 1.5
+    b: 0.75
+
+vector_store:
+  backend: "qdrant"
+  qdrant:
+    mode: "remote"
+    path: "./data/qdrant"
+    url: "http://qdrant:6333"
+    collection_name: "sem_search_chunks"
+
+retrieval:
+  candidate_k: 50
+
+hybridization:
+  method: "rrf"
+  rrf_k: 60
+  weighted:
+    dense_weight: 0.5
+    lexical_weight: 0.5
+    normalization: "minmax"
+
+reranking:
+  enabled: true
+  model_name: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+  device: "cpu"
+  top_n: 50
+  batch_size: 16
+
+query_processing:
+  typo_correction:
+    enabled: true
+    max_distance: 2
+    score_cutoff: 80.0
+  term_expansion:
+    enabled: true
+    dictionary_path: "./config/terms_dictionary.yaml"
+
+search:
+  default_mode: "hybrid_rerank"
+  default_top_k: 10
+
+admin:
+  manifest_path: "./data/index_manifest.json"
+  query_log_path: "./data/logs/queries.jsonl"
+  lexical_index_dir: "./data/lexical"

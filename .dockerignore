@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# .dockerignore — keep the Docker build context small.
+# ---------------------------------------------------------------------------
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+*.egg
+
+# Virtual environments / dependency dirs
+venv/
+env/
+.venv/
+
+# Git
+.git/
+.gitignore
+
+# Tests (not needed at runtime)
+tests/
+.pytest_cache/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker files themselves
+docker/
+
+# Data (mounted as volume at runtime; don't bake into image)
+data/qdrant/
+data/lexical/
+data/logs/
+data/index_manifest.json
+
+# Hugging Face cache (mounted as volume)
+.hf_cache/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Project docs (not needed at runtime)
+*.md
+!requirements.md

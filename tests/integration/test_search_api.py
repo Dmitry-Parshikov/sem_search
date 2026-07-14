@@ -87,13 +87,21 @@ def test_search_hybrid_mode_returns_real_fused_hits(client, _index_sample_corpus
         assert set(hit.keys()) >= {"chunk_id", "doc_id", "text", "score", "metadata", "highlights"}
 
 
-def test_search_hybrid_rerank_mode_returns_501(client, _index_sample_corpus):
+def test_search_hybrid_rerank_mode_returns_hits(client, _index_sample_corpus):
+    """Phase 7: `hybrid_rerank` is now implemented (cross-encoder reranking
+    on top of hybrid fusion+filtering) -- see `test_search_hybrid_rerank.py`
+    for the reordering/degradation-specific tests."""
+
     response = client.post("/search", json={"query": "договор аренды", "mode": "hybrid_rerank"})
 
-    assert response.status_code == 501
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "hybrid_rerank"
+    assert body["hits"]
+    assert body["index_version"] == _index_sample_corpus["index_version"]
 
 
-@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid"])
+@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid", "hybrid_rerank"])
 def test_search_must_contain_filters_to_only_matching_docs_in_every_mode(
     client, _index_sample_corpus, mode
 ):
@@ -113,7 +121,7 @@ def test_search_must_contain_filters_to_only_matching_docs_in_every_mode(
     assert all(hit["doc_id"] == "s4" for hit in body["hits"])
 
 
-@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid"])
+@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid", "hybrid_rerank"])
 def test_search_must_exclude_drops_matching_docs_in_every_mode(client, _index_sample_corpus, mode):
     """Same distinctive term ("REST", doc s4 only), opposite direction:
     must_exclude should never surface s4."""
@@ -144,6 +152,7 @@ def test_search_before_any_indexing_returns_404(fresh_client):
 def test_search_uses_default_mode_and_top_k_when_omitted(client, _index_sample_corpus):
     response = client.post("/search", json={"query": "аренда"})
 
-    # default_mode is "hybrid_rerank" per config.py -- not implemented yet, so
-    # this should surface as 501, confirming the default is actually applied.
-    assert response.status_code == 501
+    # default_mode is "hybrid_rerank" per config.py -- confirms the default is
+    # actually applied (Phase 7: hybrid_rerank is now fully implemented).
+    assert response.status_code == 200
+    assert response.json()["mode"] == "hybrid_rerank"

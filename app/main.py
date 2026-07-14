@@ -15,6 +15,7 @@ from app.lexical.base import LexicalIndex
 from app.lexical.factory import build_lexical_index
 from app.preprocessing.loaders import TextPreprocessor
 from app.query.factory import build_term_expander, build_typo_corrector
+from app.rerank.factory import get_or_build_reranker
 from app.search.active_index import ActiveIndexResolver
 from app.search.service import SearchService
 from app.vector_store.factory import build_vector_store
@@ -64,6 +65,18 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         app.state.typo_corrector = build_typo_corrector(settings.query_processing.typo_correction)
         app.state.term_expander = build_term_expander(settings.query_processing.term_expansion)
 
+        # Phase 7: the reranker (cross-encoder, Ф3.5) is `None` when
+        # `reranking.enabled` is False in config -- `SearchService` then
+        # treats `hybrid_rerank` identically to `hybrid` (configuration, not
+        # a failure). When enabled, a `.rerank()` exception at request time
+        # is still caught inside `SearchService` (NFR "Надёжность").
+        # `get_or_build_reranker` (not the plain `build_reranker`) is used
+        # here so repeated app instances built against the same reranking
+        # config (e.g. many short-lived test apps) share one loaded model
+        # instead of reloading it from disk each time -- see
+        # `app.rerank.factory`'s docstring.
+        app.state.reranker = get_or_build_reranker(settings.reranking)
+
         app.state.search_service = SearchService(
             embedder=app.state.embedder,
             vector_store=app.state.vector_store,
@@ -72,6 +85,7 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
             settings=settings,
             typo_corrector=app.state.typo_corrector,
             term_expander=app.state.term_expander,
+            reranker=app.state.reranker,
         )
 
         yield

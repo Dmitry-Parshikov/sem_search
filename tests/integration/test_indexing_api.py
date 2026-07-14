@@ -58,7 +58,9 @@ def test_health_after_indexing_reports_ok_with_matching_version(client):
     assert body["index_version"] == index_version
     assert body["subsystems"]["vector_store"] is True
     assert body["subsystems"]["embedder"] is True
-    assert body["subsystems"]["reranker"] == "not_configured"
+    # Phase 7: reranking is enabled by default (see `RerankingConfig`), so
+    # the `client` fixture's app has a real `CrossEncoderReranker` wired up.
+    assert body["subsystems"]["reranker"] is True
 
 
 def test_reindex_without_body_produces_new_version(client):

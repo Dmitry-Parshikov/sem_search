@@ -40,10 +40,20 @@ def health(request: Request) -> HealthResponse:
         except Exception:
             subsystems["embedder"] = False
 
-    # Reranker not wired until Phase 7 -- reported distinctly from a real
-    # failure so `/health` consumers can tell "not built yet" apart from
-    # "built but broken".
-    subsystems["reranker"] = "not_configured"
+    # Phase 7: reranker is `None` when `reranking.enabled` is False in
+    # config -- reported as "disabled" (a configuration choice, not a
+    # failure) rather than `False`, so it doesn't drag overall `status` to
+    # "degraded". When configured, a real check (touching `.model_name`)
+    # still runs inside try/except so a broken reranker shows up as `False`.
+    reranker = getattr(request.app.state, "reranker", None)
+    if reranker is None:
+        subsystems["reranker"] = "disabled"
+    else:
+        try:
+            _ = reranker.model_name
+            subsystems["reranker"] = True
+        except Exception:
+            subsystems["reranker"] = False
 
     index_version: str | None = None
     if settings is not None:

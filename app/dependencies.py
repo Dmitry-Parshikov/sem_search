@@ -21,8 +21,7 @@ always reflects the current active version without a process restart.
 
 Phase 5: `hybridizer` is now a real singleton too (`app.hybrid.factory
 .build_hybridizer`, built from `settings.hybridization`), stashed on
-`app.state.hybridizer` in the lifespan. `reranker` remains unbuilt until
-Phase 7.
+`app.state.hybridizer` in the lifespan.
 
 Phase 6: `typo_corrector`/`term_expander` (`app.query.factory`) are built in
 the lifespan and injected into `SearchService` directly -- these getters
@@ -30,6 +29,11 @@ exist mainly so tests can reach in and swap `app.state.typo_corrector` /
 `app.state.term_expander` for a fake (e.g. to exercise the NFR
 "Надёжность" degrade-on-failure path) the same way other singletons here
 are reachable.
+
+Phase 7: `reranker` (`app.rerank.factory.build_reranker`) is built the same
+way -- `None` when `reranking.enabled` is False, otherwise a real
+`CrossEncoderReranker` -- and injected into `SearchService`. `get_reranker`
+now reads the real singleton instead of raising.
 """
 
 from __future__ import annotations
@@ -71,9 +75,7 @@ def get_search_service(request: Request) -> SearchService:
     return request.app.state.search_service
 
 
-def get_reranker(request: Request) -> Reranker:
-    if not hasattr(request.app.state, "reranker"):
-        raise NotImplementedError("get_reranker: wired in Phase 7")
+def get_reranker(request: Request) -> Reranker | None:
     return request.app.state.reranker
 
 

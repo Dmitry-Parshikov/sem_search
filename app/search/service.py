@@ -4,8 +4,7 @@ Phase 5 wires the real `hybrid` mode (RRF/weighted fusion via the injected
 `Hybridizer`) and applies must_contain/must_exclude filtering
 (`app.search.filters`) in EVERY mode -- dense, bm25, and hybrid alike -- per
 plan decision #2: it is a correctness constraint, not something specific to
-hybrid retrieval. `hybrid_rerank` still raises `NotImplementedError` until
-Phase 7 adds cross-encoder reranking.
+hybrid retrieval.
 
 Phase 6 adds the two optional query-processing steps from the architecture
 diagram (Ф2.2 typo correction, Ф2.4 term-dictionary expansion), run at the
@@ -14,6 +13,15 @@ collaborators (`TypoCorrector | None`, `TermExpander | None`) and wrapped in
 `try/except Exception` -- per the NFR "Надёжность", failure of either must
 degrade to the base (unmodified-query) behavior plus a logged + reported
 warning, never fail the request.
+
+Phase 7 adds Ф3.5 cross-encoder reranking and the real `hybrid_rerank` mode:
+retrieve+fuse+filter exactly like `hybrid` (factored into
+`_hybrid_candidates` below to avoid duplicating that block), then -- if a
+`Reranker` is configured -- rerank the filtered candidates. Reranking is
+itself an optional stage per the NFR "Надёжность", so a failure there is
+caught the same way as typo correction/term expansion: log a warning, append
+a warning to the response, and fall back to the pre-rerank (hybrid-fused,
+filtered) ordering rather than failing the request.
 """
 
 from __future__ import annotations
@@ -27,16 +35,15 @@ from app.core.types import RetrievedCandidate, SearchHit
 from app.embedding.base import Embedder
 from app.hybrid.base import Hybridizer
 from app.query.base import TermExpander, TypoCorrector
-from app.search.active_index import ActiveIndexResolver
+from app.rerank.base import Reranker
+from app.search.active_index import ActiveIndexContext, ActiveIndexResolver
 from app.search.filters import apply_must_contain_exclude
 from app.search.retrievers import BM25Retriever, DenseRetriever
 from app.vector_store.base import VectorStore
 
 logger = structlog.get_logger(__name__)
 
-_BASE_MODES = ("dense", "bm25", "hybrid")
-_NOT_YET_IMPLEMENTED_MODES = ("hybrid_rerank",)
-_VALID_MODES = _BASE_MODES + _NOT_YET_IMPLEMENTED_MODES
+_VALID_MODES = ("dense", "bm25", "hybrid", "hybrid_rerank")
 
 
 @dataclass(frozen=True)
@@ -66,6 +73,7 @@ class SearchService:
         settings: Settings,
         typo_corrector: TypoCorrector | None = None,
         term_expander: TermExpander | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
@@ -74,6 +82,7 @@ class SearchService:
         self._settings = settings
         self._typo_corrector = typo_corrector
         self._term_expander = term_expander
+        self._reranker = reranker
 
     def search(
         self,
@@ -141,34 +150,39 @@ class SearchService:
         if mode == "dense":
             retriever = DenseRetriever(self._embedder, self._vector_store)
             candidates = retriever.retrieve(effective_query, context.collection_name, pool_size)
+            filtered = apply_must_contain_exclude(
+                candidates, must_contain or [], must_exclude or [], context.lexical_index
+            )
         elif mode == "bm25":
             retriever = BM25Retriever(context.lexical_index)
             candidates = retriever.retrieve(effective_query, pool_size)
-        elif mode == "hybrid":
-            dense_retriever = DenseRetriever(self._embedder, self._vector_store)
-            bm25_retriever = BM25Retriever(context.lexical_index)
-            dense_candidates = dense_retriever.retrieve(effective_query, context.collection_name, pool_size)
-            lexical_candidates = bm25_retriever.retrieve(effective_query, pool_size)
-            candidates = self._hybridizer.fuse(dense_candidates, lexical_candidates)
-        else:
-            raise NotImplementedError(
-                f"mode {mode!r} is implemented in Phase 7 (cross-encoder reranking)"
+            filtered = apply_must_contain_exclude(
+                candidates, must_contain or [], must_exclude or [], context.lexical_index
             )
-
-        # Ф3.4/plan decision #2: applied identically regardless of which mode
-        # produced `candidates` -- this is what makes must_contain/exclude
-        # work even in dense-only mode, not just hybrid.
-        filtered = apply_must_contain_exclude(
-            candidates,
-            must_contain or [],
-            must_exclude or [],
-            context.lexical_index,
-        )
+        elif mode == "hybrid":
+            filtered = self._hybrid_candidates(
+                effective_query, context, pool_size, must_contain, must_exclude
+            )
+        else:  # mode == "hybrid_rerank"
+            filtered = self._hybrid_candidates(
+                effective_query, context, pool_size, must_contain, must_exclude
+            )
+            if self._reranker is not None:
+                try:
+                    filtered = self._reranker.rerank(
+                        effective_query, filtered, top_n=self._settings.reranking.top_n
+                    )
+                except Exception as exc:  # noqa: BLE001 -- optional stage must never fail the request
+                    logger.warning("reranking_failed", query=effective_query, error=str(exc))
+                    warnings.append(f"Reranker failed and was skipped: {exc}")
+                    # `filtered` is left as-is: the pre-rerank, hybrid-fused
+                    # and filtered candidate list -- i.e. degrade to plain
+                    # `hybrid` behavior for this request.
 
         # Truncate to the caller's requested top_k. `SearchHit` carries no
         # `rank` field (informational rank isn't consumed downstream yet), so
         # there's nothing to renumber here -- the pre-truncation order from
-        # the retriever/fusion step is preserved as-is.
+        # the retriever/fusion/rerank step is preserved as-is.
         truncated = filtered[:top_k]
         hits = [_to_hit(candidate) for candidate in truncated]
         return SearchResult(
@@ -178,6 +192,28 @@ class SearchService:
             typo_suggestion=typo_suggestion,
             expanded_query=expanded_query,
             warnings=warnings,
+        )
+
+    def _hybrid_candidates(
+        self,
+        effective_query: str,
+        context: ActiveIndexContext,
+        pool_size: int,
+        must_contain: list[str] | None,
+        must_exclude: list[str] | None,
+    ) -> list[RetrievedCandidate]:
+        """Shared by `hybrid` and `hybrid_rerank`: retrieve from both
+        retrievers, fuse (Ф3.3), then apply the strict must_contain/exclude
+        filter (Ф3.4/plan decision #2). `hybrid_rerank` adds cross-encoder
+        reranking on top of this same, already-filtered list."""
+
+        dense_retriever = DenseRetriever(self._embedder, self._vector_store)
+        bm25_retriever = BM25Retriever(context.lexical_index)
+        dense_candidates = dense_retriever.retrieve(effective_query, context.collection_name, pool_size)
+        lexical_candidates = bm25_retriever.retrieve(effective_query, pool_size)
+        candidates = self._hybridizer.fuse(dense_candidates, lexical_candidates)
+        return apply_must_contain_exclude(
+            candidates, must_contain or [], must_exclude or [], context.lexical_index
         )
 
 

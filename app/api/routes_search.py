@@ -47,4 +47,7 @@ def search(
         index_version=result.index_version,
         mode=result.mode,
         query=body.query,
+        typo_suggestion=result.typo_suggestion,
+        expanded_query=result.expanded_query,
+        warnings=result.warnings,
     )

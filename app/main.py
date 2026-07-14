@@ -14,6 +14,7 @@ from app.indexing.service import IndexingService
 from app.lexical.base import LexicalIndex
 from app.lexical.factory import build_lexical_index
 from app.preprocessing.loaders import TextPreprocessor
+from app.query.factory import build_term_expander, build_typo_corrector
 from app.search.active_index import ActiveIndexResolver
 from app.search.service import SearchService
 from app.vector_store.factory import build_vector_store
@@ -56,12 +57,21 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         # and cheap to build, so a single process-lifetime singleton is fine.
         app.state.hybridizer = build_hybridizer(settings.hybridization)
 
+        # Phase 6: typo corrector / term expander are each either a real,
+        # stateless (cheap-to-build) singleton, or None when disabled via
+        # config -- `SearchService` skips a stage entirely when its
+        # collaborator is None instead of calling a forced no-op.
+        app.state.typo_corrector = build_typo_corrector(settings.query_processing.typo_correction)
+        app.state.term_expander = build_term_expander(settings.query_processing.term_expansion)
+
         app.state.search_service = SearchService(
             embedder=app.state.embedder,
             vector_store=app.state.vector_store,
             active_index_resolver=app.state.active_index_resolver,
             hybridizer=app.state.hybridizer,
             settings=settings,
+            typo_corrector=app.state.typo_corrector,
+            term_expander=app.state.term_expander,
         )
 
         yield

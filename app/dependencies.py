@@ -23,6 +23,13 @@ Phase 5: `hybridizer` is now a real singleton too (`app.hybrid.factory
 .build_hybridizer`, built from `settings.hybridization`), stashed on
 `app.state.hybridizer` in the lifespan. `reranker` remains unbuilt until
 Phase 7.
+
+Phase 6: `typo_corrector`/`term_expander` (`app.query.factory`) are built in
+the lifespan and injected into `SearchService` directly -- these getters
+exist mainly so tests can reach in and swap `app.state.typo_corrector` /
+`app.state.term_expander` for a fake (e.g. to exercise the NFR
+"Надёжность" degrade-on-failure path) the same way other singletons here
+are reachable.
 """
 
 from __future__ import annotations
@@ -33,6 +40,7 @@ from app.config import Settings
 from app.embedding.base import Embedder
 from app.hybrid.base import Hybridizer
 from app.indexing.service import IndexingService
+from app.query.base import TermExpander, TypoCorrector
 from app.rerank.base import Reranker
 from app.search.active_index import ActiveIndexResolver
 from app.search.service import SearchService
@@ -71,3 +79,11 @@ def get_reranker(request: Request) -> Reranker:
 
 def get_hybridizer(request: Request) -> Hybridizer:
     return request.app.state.hybridizer
+
+
+def get_typo_corrector(request: Request) -> TypoCorrector | None:
+    return request.app.state.typo_corrector
+
+
+def get_term_expander(request: Request) -> TermExpander | None:
+    return request.app.state.term_expander

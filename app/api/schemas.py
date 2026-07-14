@@ -72,3 +72,11 @@ class SearchResponse(BaseModel):
     index_version: str
     mode: str
     query: str
+    # Ф2.2: suggested correction for `query` (never used for retrieval itself).
+    typo_suggestion: str | None = None
+    # Ф2.4: the expanded query actually used for retrieval, only set when it
+    # differs from `query`.
+    expanded_query: str | None = None
+    # NFR "Надёжность": non-empty when an optional query-processing stage
+    # (typo correction, term expansion) failed and was skipped gracefully.
+    warnings: list[str] = Field(default_factory=list)

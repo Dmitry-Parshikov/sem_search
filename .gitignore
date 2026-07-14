@@ -12,4 +12,5 @@ venv/
 data/qdrant/
 data/lexical/
 data/logs/
+data/corpus/
 data/index_manifest.json

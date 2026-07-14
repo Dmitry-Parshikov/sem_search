@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
-from app.api import routes_health, routes_index, routes_reindex, routes_search
+from app.admin.query_log import QueryLogger
+from app.admin.service import AdminService
+from app.api import routes_admin, routes_health, routes_index, routes_reindex, routes_search
 from app.chunking.factory import build_chunker
 from app.config import Settings
 from app.embedding.factory import get_or_build_embedder
@@ -77,12 +80,21 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         # `app.rerank.factory`'s docstring.
         app.state.reranker = get_or_build_reranker(settings.reranking)
 
+        # Phase 8: query audit logging (Ф4.2, always-on) and the admin
+        # service backing `/admin/versions` + `/admin/rollback/{version}`
+        # (Ф4.1). `AdminService` reads the manifest fresh from disk on every
+        # call (see its docstring), so it needs no cached state of its own
+        # beyond the vector store singleton + settings.
+        app.state.query_logger = QueryLogger(Path(settings.admin.query_log_path))
+        app.state.admin_service = AdminService(vector_store=app.state.vector_store, settings=settings)
+
         app.state.search_service = SearchService(
             embedder=app.state.embedder,
             vector_store=app.state.vector_store,
             active_index_resolver=app.state.active_index_resolver,
             hybridizer=app.state.hybridizer,
             settings=settings,
+            query_logger=app.state.query_logger,
             typo_corrector=app.state.typo_corrector,
             term_expander=app.state.term_expander,
             reranker=app.state.reranker,
@@ -108,6 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_reindex.router)
     app.include_router(routes_health.router)
     app.include_router(routes_search.router)
+    app.include_router(routes_admin.router)
 
     return app
 

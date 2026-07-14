@@ -34,12 +34,20 @@ Phase 7: `reranker` (`app.rerank.factory.build_reranker`) is built the same
 way -- `None` when `reranking.enabled` is False, otherwise a real
 `CrossEncoderReranker` -- and injected into `SearchService`. `get_reranker`
 now reads the real singleton instead of raising.
+
+Phase 8: `admin_service` (`app.admin.service.AdminService`) and `query_logger`
+(`app.admin.query_log.QueryLogger`) are built in the lifespan and exposed
+here the same way -- `admin_service` backs the `/admin/*` routes,
+`query_logger` is injected into `SearchService` (always enabled, no
+disable flag, per Ф4.2).
 """
 
 from __future__ import annotations
 
 from fastapi import Request
 
+from app.admin.query_log import QueryLogger
+from app.admin.service import AdminService
 from app.config import Settings
 from app.embedding.base import Embedder
 from app.hybrid.base import Hybridizer
@@ -89,3 +97,11 @@ def get_typo_corrector(request: Request) -> TypoCorrector | None:
 
 def get_term_expander(request: Request) -> TermExpander | None:
     return request.app.state.term_expander
+
+
+def get_admin_service(request: Request) -> AdminService:
+    return request.app.state.admin_service
+
+
+def get_query_logger(request: Request) -> QueryLogger:
+    return request.app.state.query_logger

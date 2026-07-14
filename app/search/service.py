@@ -22,14 +22,23 @@ itself an optional stage per the NFR "Надёжность", so a failure there 
 caught the same way as typo correction/term expansion: log a warning, append
 a warning to the response, and fall back to the pre-rerank (hybrid-fused,
 filtered) ordering rather than failing the request.
+
+Phase 8 adds Ф4.2 structured query logging: every successful `.search()` call
+records one JSONL entry (query, mode, top_k, must_contain/exclude,
+index_version, response time, warnings) via the injected `QueryLogger`.
+Unlike the optional query-processing stages, logging isn't config-gated --
+it always runs -- but a logging failure is still wrapped in try/except so it
+can never break a search response (same reliability posture as those stages).
 """
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
 import structlog
 
+from app.admin.query_log import QueryLogger
 from app.config import Settings
 from app.core.types import RetrievedCandidate, SearchHit
 from app.embedding.base import Embedder
@@ -71,6 +80,7 @@ class SearchService:
         active_index_resolver: ActiveIndexResolver,
         hybridizer: Hybridizer,
         settings: Settings,
+        query_logger: QueryLogger,
         typo_corrector: TypoCorrector | None = None,
         term_expander: TermExpander | None = None,
         reranker: Reranker | None = None,
@@ -80,6 +90,7 @@ class SearchService:
         self._active_index_resolver = active_index_resolver
         self._hybridizer = hybridizer
         self._settings = settings
+        self._query_logger = query_logger
         self._typo_corrector = typo_corrector
         self._term_expander = term_expander
         self._reranker = reranker
@@ -94,6 +105,8 @@ class SearchService:
     ) -> SearchResult:
         if mode not in _VALID_MODES:
             raise ValueError(f"Unknown search mode {mode!r}; expected one of {_VALID_MODES}")
+
+        start_time = time.perf_counter()
 
         context = self._active_index_resolver.resolve()
 
@@ -185,7 +198,9 @@ class SearchService:
         # the retriever/fusion/rerank step is preserved as-is.
         truncated = filtered[:top_k]
         hits = [_to_hit(candidate) for candidate in truncated]
-        return SearchResult(
+        response_time_ms = (time.perf_counter() - start_time) * 1000
+
+        result = SearchResult(
             hits=hits,
             index_version=context.index_version,
             mode=mode,
@@ -193,6 +208,24 @@ class SearchService:
             expanded_query=expanded_query,
             warnings=warnings,
         )
+
+        try:
+            self._query_logger.log(
+                {
+                    "query": query,
+                    "mode": mode,
+                    "top_k": top_k,
+                    "must_contain": must_contain or [],
+                    "must_exclude": must_exclude or [],
+                    "index_version": context.index_version,
+                    "response_time_ms": response_time_ms,
+                    "warnings": warnings,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 -- logging must never break a search response
+            logger.warning("query_log_write_failed", query=query, error=str(exc))
+
+        return result
 
     def _hybrid_candidates(
         self,

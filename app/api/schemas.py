@@ -80,3 +80,38 @@ class SearchResponse(BaseModel):
     # NFR "Надёжность": non-empty when an optional query-processing stage
     # (typo correction, term expansion) failed and was skipped gracefully.
     warnings: list[str] = Field(default_factory=list)
+
+
+class VersionInfo(BaseModel):
+    """Typed mirror of one `IndexManifest` version entry (see
+    `app.admin.manifest.IndexManifest`'s docstring for the authoritative
+    field list) -- used for the `/admin/versions` API response instead of
+    exposing the bare manifest dict directly."""
+
+    index_version: str
+    created_at: str
+    embedding_model: str
+    embedding_dimension: int
+    chunking_strategy: str
+    chunking_config_signature: str
+    lexical_lemmatization: bool
+    bm25_params: dict[str, float]
+    vector_collection_name: str
+    lexical_index_path: str
+    document_count: int
+    chunk_count: int
+    source_corpus: str
+    status: Literal["active", "superseded"]
+
+
+class VersionsResponse(BaseModel):
+    versions: list[VersionInfo]
+    active_version: str | None = None
+
+
+class RollbackResponse(BaseModel):
+    active_version: str
+    created_at: str
+    document_count: int
+    chunk_count: int
+    source_corpus: str

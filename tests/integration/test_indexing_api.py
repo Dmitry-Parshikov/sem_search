@@ -8,8 +8,6 @@ Runs against a real embedded Qdrant + the real dev ST embedder (see
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 pytestmark = pytest.mark.slow
@@ -66,12 +64,6 @@ def test_health_after_indexing_reports_ok_with_matching_version(client):
 def test_reindex_without_body_produces_new_version(client):
     first = client.post("/index", json={"documents": SAMPLE_DOCS, "source_corpus": "demo"})
     first_version = first.json()["index_version"]
-
-    # `compute_index_version` (Phase 2, `app/core/ids.py`) has second-level
-    # timestamp granularity -- sleep past a full second so this test's
-    # back-to-back index/reindex calls don't collide on an identical
-    # version string.
-    time.sleep(1.1)
 
     reindex_response = client.post("/reindex", json={})
 

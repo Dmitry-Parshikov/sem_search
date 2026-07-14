@@ -1,8 +1,7 @@
-"""Integration tests for Phase 3's API layer (/index, /reindex, /health),
-maps to plan step 3: "проверить на синтетическом корпусе (черновой)".
+"""Integration tests for the indexing API layer (/index, /reindex, /health).
 
 Runs against a real embedded Qdrant + the real dev ST embedder (see
-`conftest.client`), so it's marked slow -- run explicitly with
+`conftest.client`), so it's marked slow — run explicitly with
 `pytest tests/integration` (not filtered out by `-m "not slow"`).
 """
 
@@ -58,8 +57,8 @@ def test_health_after_indexing_reports_ok_with_matching_version(client):
     assert body["index_version"] == index_version
     assert body["subsystems"]["vector_store"] is True
     assert body["subsystems"]["embedder"] is True
-    # Phase 7: reranking is enabled by default (see `RerankingConfig`), so
-    # the `client` fixture's app has a real `CrossEncoderReranker` wired up.
+    # Reranking is enabled by default (see `RerankingConfig`), so the
+    # `client` fixture's app has a real `CrossEncoderReranker` wired up.
     assert body["subsystems"]["reranker"] is True
 
 

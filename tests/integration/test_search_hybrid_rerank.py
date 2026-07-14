@@ -1,5 +1,5 @@
-"""Integration tests for Phase 7's `hybrid_rerank` mode: acceptance criterion
-#2 ("при hybrid_rerank итоговый порядок отличается от hybrid за счёт
+"""Integration tests for `hybrid_rerank` mode: acceptance criterion #2
+("при hybrid_rerank итоговый порядок отличается от hybrid за счёт
 реранжирования топ-N") plus the NFR "Надёжность" degrade-gracefully contract
 for the reranker specifically (mirrors the typo/expansion degradation tests
 in `test_search_query_processing.py`).

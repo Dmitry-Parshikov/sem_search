@@ -3,43 +3,18 @@
 Singletons (embedder, vector store, chunker, indexing service, reranker,
 hybridizer, ...) are built once in `app.main`'s lifespan and stashed on
 `request.app.state`. These getters are the single place routes reach into
-that state, so routes never import concrete implementations directly
-(keeps the DI story real, not just an interface exercise).
+that state, so routes never import concrete implementations directly.
 
-Phase 3: `get_settings`, `get_embedder`, `get_vector_store`, and
-`get_indexing_service` read real singletons built by the lifespan.
-
-Phase 4: there is still no single fixed lexical-index singleton for the
-app's lifetime -- the *query-time* lexical index depends on whichever
-`index_version` is currently active (and changes on reindex/rollback) --
-but rather than leaving that as a per-request `NotImplementedError`, the
-lifespan now builds a single `ActiveIndexResolver` (`app.search.active_index`)
-once at startup and keeps it on `app.state.active_index_resolver`. The
-resolver itself re-checks the manifest and rebuilds its cached
-`LexicalIndex` only when the active version actually changes, so search
-always reflects the current active version without a process restart.
-
-Phase 5: `hybridizer` is now a real singleton too (`app.hybrid.factory
-.build_hybridizer`, built from `settings.hybridization`), stashed on
-`app.state.hybridizer` in the lifespan.
-
-Phase 6: `typo_corrector`/`term_expander` (`app.query.factory`) are built in
-the lifespan and injected into `SearchService` directly -- these getters
-exist mainly so tests can reach in and swap `app.state.typo_corrector` /
-`app.state.term_expander` for a fake (e.g. to exercise the NFR
-"Надёжность" degrade-on-failure path) the same way other singletons here
-are reachable.
-
-Phase 7: `reranker` (`app.rerank.factory.build_reranker`) is built the same
-way -- `None` when `reranking.enabled` is False, otherwise a real
-`CrossEncoderReranker` -- and injected into `SearchService`. `get_reranker`
-now reads the real singleton instead of raising.
-
-Phase 8: `admin_service` (`app.admin.service.AdminService`) and `query_logger`
-(`app.admin.query_log.QueryLogger`) are built in the lifespan and exposed
-here the same way -- `admin_service` backs the `/admin/*` routes,
-`query_logger` is injected into `SearchService` (always enabled, no
-disable flag, per Ф4.2).
+The lifespan builds:
+- `ActiveIndexResolver` once at startup — it re-checks the manifest and
+  rebuilds its cached `LexicalIndex` only when the active version changes.
+- `hybridizer` (stateless, per config) as a process-lifetime singleton.
+- `typo_corrector` / `term_expander` — real instances, or `None` when
+  disabled via config.
+- `reranker` — `None` when `reranking.enabled` is False, otherwise a real
+  `CrossEncoderReranker`.
+- `admin_service` and `query_logger` — backing `/admin/*` routes and
+  structured search-audit logging (Ф4.2).
 """
 
 from __future__ import annotations

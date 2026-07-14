@@ -30,9 +30,9 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         settings = settings_override or Settings.load()
         app.state.settings = settings
 
-        # Built once per process: embedder (Ф2.5 -- same instance for
+        # Built once per process: embedder (Ф2.5 — same instance for
         # indexing and querying), vector store, chunker. The lexical index is
-        # NOT a singleton here -- `IndexingService` needs a *fresh* one per
+        # NOT a singleton here — `IndexingService` needs a *fresh* one per
         # run (see `app.lexical.factory.build_lexical_index`'s docstring),
         # so only the factory is stashed/passed, not a built instance.
         app.state.embedder = get_or_build_embedder(settings.embedding)
@@ -51,40 +51,27 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
             settings=settings,
         )
 
-        # Phase 4: the active-index resolver is a long-lived singleton (it
-        # caches the currently-active version's LexicalIndex across
-        # requests) built once here, not per-request -- see
-        # `app.search.active_index.ActiveIndexResolver`'s docstring.
+        # Active-index resolver: caches the current version's LexicalIndex
+        # across requests, rebuilt only when the active version changes.
         app.state.active_index_resolver = ActiveIndexResolver(settings)
 
-        # Phase 5: the hybridizer (RRF or weighted, per config) is stateless
-        # and cheap to build, so a single process-lifetime singleton is fine.
+        # Hybridizer (RRF or weighted, per config) — stateless singleton.
         app.state.hybridizer = build_hybridizer(settings.hybridization)
 
-        # Phase 6: typo corrector / term expander are each either a real,
-        # stateless (cheap-to-build) singleton, or None when disabled via
-        # config -- `SearchService` skips a stage entirely when its
-        # collaborator is None instead of calling a forced no-op.
+        # Typo corrector / term expander: either a real singleton or None when
+        # disabled via config. `SearchService` skips a stage entirely when its
+        # collaborator is None.
         app.state.typo_corrector = build_typo_corrector(settings.query_processing.typo_correction)
         app.state.term_expander = build_term_expander(settings.query_processing.term_expansion)
 
-        # Phase 7: the reranker (cross-encoder, Ф3.5) is `None` when
-        # `reranking.enabled` is False in config -- `SearchService` then
-        # treats `hybrid_rerank` identically to `hybrid` (configuration, not
-        # a failure). When enabled, a `.rerank()` exception at request time
-        # is still caught inside `SearchService` (NFR "Надёжность").
-        # `get_or_build_reranker` (not the plain `build_reranker`) is used
-        # here so repeated app instances built against the same reranking
-        # config (e.g. many short-lived test apps) share one loaded model
-        # instead of reloading it from disk each time -- see
-        # `app.rerank.factory`'s docstring.
+        # Reranker (cross-encoder, Ф3.5): `None` when `reranking.enabled` is
+        # False. When enabled, a `.rerank()` exception is caught inside
+        # `SearchService` (NFR "Надёжность"). `get_or_build_reranker` shares
+        # one loaded model across repeated app instances (e.g. test apps).
         app.state.reranker = get_or_build_reranker(settings.reranking)
 
-        # Phase 8: query audit logging (Ф4.2, always-on) and the admin
-        # service backing `/admin/versions` + `/admin/rollback/{version}`
-        # (Ф4.1). `AdminService` reads the manifest fresh from disk on every
-        # call (see its docstring), so it needs no cached state of its own
-        # beyond the vector store singleton + settings.
+        # Query audit logging (Ф4.2) and admin service (Ф4.1).
+        # `AdminService` reads the manifest fresh from disk on every call.
         app.state.query_logger = QueryLogger(Path(settings.admin.query_log_path))
         app.state.admin_service = AdminService(vector_store=app.state.vector_store, settings=settings)
 

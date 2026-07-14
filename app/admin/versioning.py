@@ -1,8 +1,8 @@
 """Helpers tying `index_version` to per-version storage locations.
 
 Each index version gets its own Qdrant collection and its own BM25 pickle
-file (plan decision #5), so rollback is a matter of switching the manifest's
-`active_version` pointer rather than a destructive operation.
+file, so rollback is a matter of switching the manifest's `active_version`
+pointer rather than a destructive operation.
 """
 
 from __future__ import annotations

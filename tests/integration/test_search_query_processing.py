@@ -1,4 +1,4 @@
-"""Integration tests for Phase 6 query processing wired into `/search`:
+"""Integration tests for query processing wired into `/search`:
 Ф2.2 typo correction (suggestion only, never blocking) and Ф2.4 term
 expansion (actually changes what gets retrieved), plus the NFR
 "Надёжность" degrade-gracefully contract for both optional stages.

@@ -1,9 +1,9 @@
 """Offline indexing orchestration (Ф1.1-Ф1.6).
 
 `IndexingService.run()` is always a full rebuild into a brand-new
-`index_version` (never an incremental patch), per the reproducibility NFR
-and plan decision #5 (each version gets its own Qdrant collection + BM25
-pickle, so rollback is just a manifest pointer swap).
+`index_version` (never an incremental patch), per the reproducibility NFR.
+Each version gets its own Qdrant collection + BM25 pickle, so rollback is
+just a manifest pointer swap.
 """
 
 from __future__ import annotations

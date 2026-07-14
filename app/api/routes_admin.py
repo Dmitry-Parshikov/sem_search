@@ -1,8 +1,6 @@
 """`GET /admin/versions`, `POST /admin/rollback/{version}` (Ф4.1): index
-version listing and non-destructive rollback (plan decision #5). This router
-goes beyond the four "required" endpoints listed in the spec's API contract
-(section 9) -- see plan decision #1 -- to actually cover Ф4.1's "просмотр
-статуса индекса ... откат к предыдущей версии" requirement.
+version listing and non-destructive rollback. Covers the "просмотр статуса
+индекса ... откат к предыдущей версии" requirement.
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """Integration tests for `/admin/versions` and `/admin/rollback/{version}`
-(Ф4.1, plan decision #5) plus the query-log side effect of `/search` (Ф4.2).
+(Ф4.1) plus the query-log side effect of `/search` (Ф4.2).
 
 Runs against a real embedded Qdrant + the real dev ST embedder (see
 `conftest.client`), so it's marked slow.

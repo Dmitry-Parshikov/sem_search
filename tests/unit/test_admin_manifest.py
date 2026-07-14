@@ -66,8 +66,8 @@ def test_save_load_round_trip(tmp_path: Path):
 
 def test_rollback_pointer_update(tmp_path: Path):
     """Simulates a rollback: manually flip active_version back to an older
-    entry (the real rollback endpoint comes in Phase 8; here we only verify
-    the manifest data layer supports the pointer-swap semantics)."""
+    entry to verify the manifest data layer supports the pointer-swap
+    semantics used by the admin rollback endpoint."""
 
     path = tmp_path / "manifest.json"
     manifest = IndexManifest()
@@ -83,7 +83,7 @@ def test_rollback_pointer_update(tmp_path: Path):
     assert final.active_version == "v1"
     # Statuses in the persisted version entries are untouched by a pointer
     # swap alone (rollback logic that also flips `status` fields belongs to
-    # Phase 8's admin service, not this data layer).
+    # admin service, not this data layer).
     assert len(final.list_versions()) == 2
 
 

@@ -142,8 +142,7 @@ def test_run_builds_lexical_index(tmp_path: Path):
 
 def test_reindex_determinism_same_chunk_ids_and_vectors(tmp_path: Path):
     """Two runs of the same corpus/config produce an identical chunk_id set
-    and identical stored vectors (previews acceptance criterion 5; the full
-    real-model version comes in Phase 10)."""
+    and identical stored vectors (acceptance criterion #5)."""
 
     documents = make_documents()
 

@@ -1,34 +1,22 @@
 """Online search orchestration (Ф2.1-Ф2.5, Ф3.1-Ф3.4, Ф3.6).
 
-Phase 5 wires the real `hybrid` mode (RRF/weighted fusion via the injected
-`Hybridizer`) and applies must_contain/must_exclude filtering
-(`app.search.filters`) in EVERY mode -- dense, bm25, and hybrid alike -- per
-plan decision #2: it is a correctness constraint, not something specific to
-hybrid retrieval.
+Modes:
+- `dense`: semantic ANN search via the embedder + vector store.
+- `bm25`: lexical BM25 search with optional Russian lemmatization.
+- `hybrid`: RRF or weighted fusion of dense + BM25, followed by
+  must_contain/must_exclude post-filtering (applies in ALL modes).
+- `hybrid_rerank`: hybrid retrieval + fusion + filtering + cross-encoder
+  reranking of the top-N candidates.
 
-Phase 6 adds the two optional query-processing steps from the architecture
-diagram (Ф2.2 typo correction, Ф2.4 term-dictionary expansion), run at the
-very start of `.search()`, before any retrieval. Both are wired as `None`-able
-collaborators (`TypoCorrector | None`, `TermExpander | None`) and wrapped in
-`try/except Exception` -- per the NFR "Надёжность", failure of either must
-degrade to the base (unmodified-query) behavior plus a logged + reported
-warning, never fail the request.
+All optional query-processing stages (typo correction, term expansion,
+reranking) are wrapped in try/except — per the NFR "Надёжность", failure of
+any optional stage degrades to the base behaviour plus a logged warning,
+never failing the request.
 
-Phase 7 adds Ф3.5 cross-encoder reranking and the real `hybrid_rerank` mode:
-retrieve+fuse+filter exactly like `hybrid` (factored into
-`_hybrid_candidates` below to avoid duplicating that block), then -- if a
-`Reranker` is configured -- rerank the filtered candidates. Reranking is
-itself an optional stage per the NFR "Надёжность", so a failure there is
-caught the same way as typo correction/term expansion: log a warning, append
-a warning to the response, and fall back to the pre-rerank (hybrid-fused,
-filtered) ordering rather than failing the request.
-
-Phase 8 adds Ф4.2 structured query logging: every successful `.search()` call
-records one JSONL entry (query, mode, top_k, must_contain/exclude,
-index_version, response time, warnings) via the injected `QueryLogger`.
-Unlike the optional query-processing stages, logging isn't config-gated --
-it always runs -- but a logging failure is still wrapped in try/except so it
-can never break a search response (same reliability posture as those stages).
+Every successful `.search()` call records one JSONL entry (query, mode,
+top_k, must_contain/exclude, index_version, response time, warnings) via the
+injected `QueryLogger`. A logging failure is also caught so it can never
+break a search response.
 """
 
 from __future__ import annotations
@@ -237,7 +225,7 @@ class SearchService:
     ) -> list[RetrievedCandidate]:
         """Shared by `hybrid` and `hybrid_rerank`: retrieve from both
         retrievers, fuse (Ф3.3), then apply the strict must_contain/exclude
-        filter (Ф3.4/plan decision #2). `hybrid_rerank` adds cross-encoder
+        filter (Ф3.4). `hybrid_rerank` adds cross-encoder
         reranking on top of this same, already-filtered list."""
 
         dense_retriever = DenseRetriever(self._embedder, self._vector_store)
@@ -251,8 +239,8 @@ class SearchService:
 
 
 def _to_hit(candidate: RetrievedCandidate) -> SearchHit:
-    # Highlighting (Ф3.6 "опционально подсвеченные совпадающие термины") is
-    # not built yet -- left empty until a later phase.
+    # Highlighting (Ф3.6 — optional matched-term highlighting) is not
+    # implemented; left as an empty list for future extension.
     return SearchHit(
         chunk_id=candidate.chunk_id,
         doc_id=candidate.doc_id,

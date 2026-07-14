@@ -1,12 +1,11 @@
 """Unit tests for `AdminService.rollback`/`list_versions`/`get_active`
-(Ф4.1, plan decision #5): rollback is a manifest pointer-swap after
-validating the target version's Qdrant collection + BM25 pickle still exist
--- no rebuild, no destructive Qdrant/file operations.
+(Ф4.1): rollback is a manifest pointer-swap after validating the target
+version's Qdrant collection + BM25 pickle still exist — no rebuild, no
+destructive Qdrant/file operations.
 
 Uses a tiny fake `VectorStore` (following the same local-fake convention as
-`tests/unit/test_search_retrievers.py` -- there is no shared `tests/fakes.py`
-in this codebase yet) so this stays a pure unit test, independent of a real
-Qdrant instance.
+`tests/unit/test_search_retrievers.py`) so this stays a pure unit test,
+independent of a real Qdrant instance.
 """
 
 from __future__ import annotations

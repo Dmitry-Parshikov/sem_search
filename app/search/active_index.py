@@ -1,14 +1,13 @@
 """Active-index-version resolution for online search.
 
-Deferred from Phase 3 on purpose (see `app.dependencies`'s Phase-3 docstring):
-unlike the embedder/vector store, there is no single lexical index singleton
-for the app's lifetime -- the query-time lexical index depends on whichever
+Unlike the embedder/vector store, there is no single lexical index singleton
+for the app's lifetime — the query-time lexical index depends on whichever
 `index_version` the manifest currently marks `active`, and that can change
-underneath a running process via `/reindex` or `/admin/rollback/{version}`
-(Phase 8). `ActiveIndexResolver` is what makes that "just work" without a
-restart: it re-checks the manifest on every call and only rebuilds the
-(comparatively expensive) `LexicalIndex` when the active version actually
-changed, via a single-slot cache.
+underneath a running process via `/reindex` or `/admin/rollback/{version}`.
+`ActiveIndexResolver` makes that work without a restart: it re-checks the
+manifest on every call and only rebuilds the (comparatively expensive)
+`LexicalIndex` when the active version actually changed, via a single-slot
+cache.
 """
 
 from __future__ import annotations

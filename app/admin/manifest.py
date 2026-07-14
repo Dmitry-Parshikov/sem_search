@@ -1,8 +1,8 @@
 """Index version manifest (Ф1.6 / Ф4.1 data layer).
 
-Full admin API (routes) comes in Phase 8; this module just owns the JSON
-data structure and atomic read/write, since `IndexingService` (Phase 2)
-needs to record a version at the end of every indexing run.
+Stores the JSON data structure for index versions and provides atomic
+read/write. `IndexingService` uses `record_new` at the end of every
+indexing run to persist a new version entry.
 """
 
 from __future__ import annotations

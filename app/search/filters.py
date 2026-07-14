@@ -1,11 +1,10 @@
 """Ф3.4 strict post-filtering: must_contain / must_exclude.
 
-Per plan decision #2, this applies in ALL search modes (dense/bm25/hybrid/
-hybrid_rerank) -- it is a correctness constraint on which chunks may appear
-in the result at all, independent of how they were scored/ranked. Per plan
-decision #3, matching goes through `LexicalIndex.contains_all`/`contains_any`,
-which tokenize/lemmatize `terms` with the same `RussianTokenizer` used for
-BM25 (see `app.lexical.bm25_index.BM25LexicalIndex`), so must_contain/exclude
+Applies in ALL search modes (dense/bm25/hybrid/hybrid_rerank) — it is a
+correctness constraint on which chunks may appear in the result at all,
+independent of how they were scored/ranked. Matching goes through
+`LexicalIndex.contains_all`/`contains_any`, which tokenize/lemmatize `terms`
+with the same `RussianTokenizer` used for BM25, so must_contain/exclude
 terms are matched on lemma-normalized tokens rather than literal substrings.
 """
 

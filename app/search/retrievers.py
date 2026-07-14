@@ -2,10 +2,10 @@
 
 Both retrievers normalize `RetrievedCandidate.rank` to a 1-based rank in the
 order returned by the underlying store/index, regardless of whether that
-store already set `.rank` (and regardless of its base, 0 or 1) -- Phase 5's
-RRF fusion needs a consistent, guaranteed 1-based per-retriever rank to
-compute `1 / (k + rank)`, so this is normalized here once rather than
-trusted from each backend.
+store already set `.rank` (and regardless of its base, 0 or 1). RRF fusion
+needs a consistent, guaranteed 1-based per-retriever rank to compute
+`1 / (k + rank)`, so this is normalized here once rather than trusted from
+each backend.
 """
 
 from __future__ import annotations

@@ -1,17 +1,16 @@
 """Admin service (Ф4.1): index version listing and rollback.
 
-Wraps `IndexManifest` (data layer, Phase 2) + `VectorStore` (asset-existence
-check) + `Settings` (manifest path) into the operations `app.api.routes_admin`
-needs. Rollback is non-destructive by design (plan decision #5 / see
-`app.admin.versioning`'s docstring): each index version already owns its own
-Qdrant collection and BM25 pickle, so "rolling back" never rebuilds anything
--- it only validates that the target version's assets still exist, then
-flips the manifest's `status` fields and `active_version` pointer.
+Wraps `IndexManifest` + `VectorStore` + `Settings` into the operations
+`app.api.routes_admin` needs. Rollback is non-destructive: each index version
+already owns its own Qdrant collection and BM25 pickle, so "rolling back"
+never rebuilds anything — it only validates that the target version's assets
+still exist, then flips the manifest's `status` fields and `active_version`
+pointer.
 
 The manifest is loaded fresh from disk on every call (same pattern as
 `app.search.active_index.ActiveIndexResolver`) rather than cached on
-`AdminService`, so concurrent admin calls / a search request racing a
-rollback always see the latest on-disk state.
+`AdminService`, so concurrent admin calls and search requests always see the
+latest on-disk state.
 """
 
 from __future__ import annotations

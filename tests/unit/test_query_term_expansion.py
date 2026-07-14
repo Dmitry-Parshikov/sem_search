@@ -1,8 +1,7 @@
 """Unit tests for `DictTermExpander` and `load_term_dictionary` (Ф2.4).
 
 Uses a small temp YAML fixture rather than depending on the real
-`config/terms_dictionary.yaml`'s contents (which may change independently,
-e.g. in Phase 10 when the full dictionary is populated)."""
+`config/terms_dictionary.yaml`'s contents (which may change independently)."""
 
 from __future__ import annotations
 

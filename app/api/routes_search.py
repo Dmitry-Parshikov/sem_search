@@ -1,7 +1,7 @@
 """`POST /search` (Ф2.1, Ф3.1-Ф3.4, Ф3.5, Ф3.6): dense/bm25/hybrid/
 hybrid_rerank retrieval, with must_contain/must_exclude filtering applied in
-all four modes (plan decision #2) and cross-encoder reranking (Ф3.5) applied
-in `hybrid_rerank` on top of the hybrid-fused, filtered candidates.
+all four modes and cross-encoder reranking (Ф3.5) applied in `hybrid_rerank`
+on top of the hybrid-fused, filtered candidates.
 """
 
 from __future__ import annotations

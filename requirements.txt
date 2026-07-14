@@ -4,7 +4,7 @@ pydantic>=2.6,<3.0
 pydantic-settings>=2.2,<3.0
 pyyaml>=6.0,<7.0
 
-# ML / retrieval stack (heavy, installed starting Phase 2)
+# ML / retrieval stack
 sentence-transformers>=2.6,<4.0
 transformers>=4.39,<5.0
 qdrant-client>=1.8,<2.0

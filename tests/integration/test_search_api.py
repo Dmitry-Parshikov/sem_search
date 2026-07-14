@@ -1,6 +1,6 @@
-"""Integration tests for the `/search` endpoint: `dense`/`bm25` modes (Phase
-4) plus real `hybrid` fusion and must_contain/must_exclude filtering across
-all modes (Phase 5, plan step 5).
+"""Integration tests for the `/search` endpoint: `dense`/`bm25` modes,
+`hybrid` fusion, must_contain/must_exclude filtering across all modes,
+and `hybrid_rerank`.
 
 Runs against a real embedded Qdrant + the real dev ST embedder (see
 `conftest.client`), so it's marked slow.
@@ -88,9 +88,9 @@ def test_search_hybrid_mode_returns_real_fused_hits(client, _index_sample_corpus
 
 
 def test_search_hybrid_rerank_mode_returns_hits(client, _index_sample_corpus):
-    """Phase 7: `hybrid_rerank` is now implemented (cross-encoder reranking
-    on top of hybrid fusion+filtering) -- see `test_search_hybrid_rerank.py`
-    for the reordering/degradation-specific tests."""
+    """`hybrid_rerank`: cross-encoder reranking on top of hybrid
+    fusion+filtering -- see `test_search_hybrid_rerank.py` for the
+    reordering/degradation-specific tests."""
 
     response = client.post("/search", json={"query": "договор аренды", "mode": "hybrid_rerank"})
 
@@ -152,7 +152,6 @@ def test_search_before_any_indexing_returns_404(fresh_client):
 def test_search_uses_default_mode_and_top_k_when_omitted(client, _index_sample_corpus):
     response = client.post("/search", json={"query": "аренда"})
 
-    # default_mode is "hybrid_rerank" per config.py -- confirms the default is
-    # actually applied (Phase 7: hybrid_rerank is now fully implemented).
+    # default_mode is "hybrid_rerank" per config.py.
     assert response.status_code == 200
     assert response.json()["mode"] == "hybrid_rerank"

@@ -40,11 +40,11 @@ def health(request: Request) -> HealthResponse:
         except Exception:
             subsystems["embedder"] = False
 
-    # Phase 7: reranker is `None` when `reranking.enabled` is False in
-    # config -- reported as "disabled" (a configuration choice, not a
-    # failure) rather than `False`, so it doesn't drag overall `status` to
-    # "degraded". When configured, a real check (touching `.model_name`)
-    # still runs inside try/except so a broken reranker shows up as `False`.
+    # Reranker is `None` when `reranking.enabled` is False in config —
+    # reported as "disabled" (a configuration choice, not a failure) rather
+    # than `False`, so it doesn't drag overall `status` to "degraded". When
+    # configured, a real check (touching `.model_name`) still runs inside
+    # try/except so a broken reranker shows up as `False`.
     reranker = getattr(request.app.state, "reranker", None)
     if reranker is None:
         subsystems["reranker"] = "disabled"

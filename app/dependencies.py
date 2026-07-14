@@ -8,13 +8,17 @@ that state, so routes never import concrete implementations directly
 
 Phase 3: `get_settings`, `get_embedder`, `get_vector_store`, and
 `get_indexing_service` read real singletons built by the lifespan.
-`get_lexical_index` stays unwired here on purpose: unlike embedder/vector
-store, there is no single fixed lexical-index singleton for the app's
-lifetime -- the *query-time* lexical index depends on whichever
-`index_version` is currently active (and changes on reindex/rollback), so
-loading it is a per-request concern for Phase 4's search routes, not
-something the lifespan can pin down once at startup. `reranker`/
-`hybridizer` remain unbuilt until Phases 7/5.
+
+Phase 4: there is still no single fixed lexical-index singleton for the
+app's lifetime -- the *query-time* lexical index depends on whichever
+`index_version` is currently active (and changes on reindex/rollback) --
+but rather than leaving that as a per-request `NotImplementedError`, the
+lifespan now builds a single `ActiveIndexResolver` (`app.search.active_index`)
+once at startup and keeps it on `app.state.active_index_resolver`. The
+resolver itself re-checks the manifest and rebuilds its cached
+`LexicalIndex` only when the active version actually changes, so search
+always reflects the current active version without a process restart.
+`reranker`/`hybridizer` remain unbuilt until Phases 7/5.
 """
 
 from __future__ import annotations
@@ -25,8 +29,9 @@ from app.config import Settings
 from app.embedding.base import Embedder
 from app.hybrid.base import Hybridizer
 from app.indexing.service import IndexingService
-from app.lexical.base import LexicalIndex
 from app.rerank.base import Reranker
+from app.search.active_index import ActiveIndexResolver
+from app.search.service import SearchService
 from app.vector_store.base import VectorStore
 
 
@@ -46,10 +51,12 @@ def get_indexing_service(request: Request) -> IndexingService:
     return request.app.state.indexing_service
 
 
-def get_lexical_index(request: Request) -> LexicalIndex:
-    if not hasattr(request.app.state, "lexical_index"):
-        raise NotImplementedError("get_lexical_index: wired in Phase 4 (per active index_version)")
-    return request.app.state.lexical_index
+def get_active_index_resolver(request: Request) -> ActiveIndexResolver:
+    return request.app.state.active_index_resolver
+
+
+def get_search_service(request: Request) -> SearchService:
+    return request.app.state.search_service
 
 
 def get_reranker(request: Request) -> Reranker:

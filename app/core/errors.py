@@ -24,3 +24,9 @@ class IndexVersionNotFoundError(SemSearchError):
 
 class IndexVersionAssetsMissingError(SemSearchError):
     """Raised on rollback when the target version's collection/lexical file is gone."""
+
+
+class NoActiveIndexError(SemSearchError):
+    """Raised by search when the manifest has no active index version yet
+    (nothing indexed). Callers (the /search route) should turn this into a
+    404, not a stack trace."""

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import routes_health, routes_index, routes_reindex
+from app.api import routes_health, routes_index, routes_reindex, routes_search
 from app.chunking.factory import build_chunker
 from app.config import Settings
 from app.embedding.factory import get_or_build_embedder
@@ -13,6 +13,8 @@ from app.indexing.service import IndexingService
 from app.lexical.base import LexicalIndex
 from app.lexical.factory import build_lexical_index
 from app.preprocessing.loaders import TextPreprocessor
+from app.search.active_index import ActiveIndexResolver
+from app.search.service import SearchService
 from app.vector_store.factory import build_vector_store
 
 
@@ -43,6 +45,18 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
             settings=settings,
         )
 
+        # Phase 4: the active-index resolver is a long-lived singleton (it
+        # caches the currently-active version's LexicalIndex across
+        # requests) built once here, not per-request -- see
+        # `app.search.active_index.ActiveIndexResolver`'s docstring.
+        app.state.active_index_resolver = ActiveIndexResolver(settings)
+        app.state.search_service = SearchService(
+            embedder=app.state.embedder,
+            vector_store=app.state.vector_store,
+            active_index_resolver=app.state.active_index_resolver,
+            settings=settings,
+        )
+
         yield
 
     return lifespan
@@ -62,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_index.router)
     app.include_router(routes_reindex.router)
     app.include_router(routes_health.router)
+    app.include_router(routes_search.router)
 
     return app
 

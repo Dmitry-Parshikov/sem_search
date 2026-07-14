@@ -48,3 +48,27 @@ class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     index_version: str | None
     subsystems: dict[str, bool | str]
+
+
+class SearchRequest(BaseModel):
+    query: str
+    mode: Literal["dense", "bm25", "hybrid", "hybrid_rerank"] | None = None
+    top_k: int | None = None
+    must_contain: list[str] = Field(default_factory=list)
+    must_exclude: list[str] = Field(default_factory=list)
+
+
+class SearchHitOut(BaseModel):
+    chunk_id: str
+    doc_id: str
+    text: str
+    score: float
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    highlights: list[str] = Field(default_factory=list)
+
+
+class SearchResponse(BaseModel):
+    hits: list[SearchHitOut]
+    index_version: str
+    mode: str
+    query: str

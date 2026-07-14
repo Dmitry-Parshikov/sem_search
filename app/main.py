@@ -9,6 +9,7 @@ from app.api import routes_health, routes_index, routes_reindex, routes_search
 from app.chunking.factory import build_chunker
 from app.config import Settings
 from app.embedding.factory import get_or_build_embedder
+from app.hybrid.factory import build_hybridizer
 from app.indexing.service import IndexingService
 from app.lexical.base import LexicalIndex
 from app.lexical.factory import build_lexical_index
@@ -50,10 +51,16 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         # requests) built once here, not per-request -- see
         # `app.search.active_index.ActiveIndexResolver`'s docstring.
         app.state.active_index_resolver = ActiveIndexResolver(settings)
+
+        # Phase 5: the hybridizer (RRF or weighted, per config) is stateless
+        # and cheap to build, so a single process-lifetime singleton is fine.
+        app.state.hybridizer = build_hybridizer(settings.hybridization)
+
         app.state.search_service = SearchService(
             embedder=app.state.embedder,
             vector_store=app.state.vector_store,
             active_index_resolver=app.state.active_index_resolver,
+            hybridizer=app.state.hybridizer,
             settings=settings,
         )
 

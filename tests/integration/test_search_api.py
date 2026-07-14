@@ -1,6 +1,6 @@
-"""Integration tests for Phase 4's `/search` endpoint (dense/bm25 modes),
-maps to plan step 4: dense-retriever, BM25-retriever, `dense`/`bm25` modes
-in `/search`.
+"""Integration tests for the `/search` endpoint: `dense`/`bm25` modes (Phase
+4) plus real `hybrid` fusion and must_contain/must_exclude filtering across
+all modes (Phase 5, plan step 5).
 
 Runs against a real embedded Qdrant + the real dev ST embedder (see
 `conftest.client`), so it's marked slow.
@@ -75,16 +75,57 @@ def test_search_bm25_mode_returns_hits(client, _index_sample_corpus):
     assert body["index_version"] == _index_sample_corpus["index_version"]
 
 
-def test_search_hybrid_mode_returns_501(client, _index_sample_corpus):
+def test_search_hybrid_mode_returns_real_fused_hits(client, _index_sample_corpus):
     response = client.post("/search", json={"query": "договор аренды", "mode": "hybrid"})
 
-    assert response.status_code == 501
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "hybrid"
+    assert body["hits"]
+    assert body["index_version"] == _index_sample_corpus["index_version"]
+    for hit in body["hits"]:
+        assert set(hit.keys()) >= {"chunk_id", "doc_id", "text", "score", "metadata", "highlights"}
 
 
 def test_search_hybrid_rerank_mode_returns_501(client, _index_sample_corpus):
     response = client.post("/search", json={"query": "договор аренды", "mode": "hybrid_rerank"})
 
     assert response.status_code == 501
+
+
+@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid"])
+def test_search_must_contain_filters_to_only_matching_docs_in_every_mode(
+    client, _index_sample_corpus, mode
+):
+    """Plan decision #2: must_contain/must_exclude apply in ALL modes, not
+    just hybrid. "REST" appears only in doc s4 (see SAMPLE_DOCS) -- proving
+    this holds even under `mode="dense"` is the point of parametrizing over
+    all three real modes."""
+
+    response = client.post(
+        "/search",
+        json={"query": "веб-сервисы", "mode": mode, "must_contain": ["REST"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hits"], f"expected at least one hit for mode={mode}"
+    assert all(hit["doc_id"] == "s4" for hit in body["hits"])
+
+
+@pytest.mark.parametrize("mode", ["dense", "bm25", "hybrid"])
+def test_search_must_exclude_drops_matching_docs_in_every_mode(client, _index_sample_corpus, mode):
+    """Same distinctive term ("REST", doc s4 only), opposite direction:
+    must_exclude should never surface s4."""
+
+    response = client.post(
+        "/search",
+        json={"query": "веб-сервисы", "mode": mode, "must_exclude": ["REST"], "top_k": 10},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert all(hit["doc_id"] != "s4" for hit in body["hits"])
 
 
 def test_search_top_k_is_respected(client, _index_sample_corpus):

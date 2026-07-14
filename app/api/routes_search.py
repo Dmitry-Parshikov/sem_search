@@ -1,9 +1,10 @@
-"""`POST /search` (Ф2.1, Ф3.1, Ф3.2, Ф3.6): dense/bm25 retrieval in Phase 4.
+"""`POST /search` (Ф2.1, Ф3.1-Ф3.4, Ф3.6): dense/bm25/hybrid retrieval, with
+must_contain/must_exclude filtering applied in all three (plan decision #2).
 
-`hybrid`/`hybrid_rerank` are real, selectable modes per the API contract
-(Ф4.3), but their implementation is Phase 5 (RRF fusion) / Phase 7
-(cross-encoder rerank) work -- requesting them now returns 501, not a fake
-result, so callers can tell "not built yet" apart from a real failure.
+`hybrid_rerank` is a real, selectable mode per the API contract (Ф4.3), but
+its implementation is Phase 7 (cross-encoder rerank) work -- requesting it
+now returns 501, not a fake result, so callers can tell "not built yet"
+apart from a real failure.
 """
 
 from __future__ import annotations

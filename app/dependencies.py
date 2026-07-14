@@ -18,7 +18,11 @@ once at startup and keeps it on `app.state.active_index_resolver`. The
 resolver itself re-checks the manifest and rebuilds its cached
 `LexicalIndex` only when the active version actually changes, so search
 always reflects the current active version without a process restart.
-`reranker`/`hybridizer` remain unbuilt until Phases 7/5.
+
+Phase 5: `hybridizer` is now a real singleton too (`app.hybrid.factory
+.build_hybridizer`, built from `settings.hybridization`), stashed on
+`app.state.hybridizer` in the lifespan. `reranker` remains unbuilt until
+Phase 7.
 """
 
 from __future__ import annotations
@@ -66,6 +70,4 @@ def get_reranker(request: Request) -> Reranker:
 
 
 def get_hybridizer(request: Request) -> Hybridizer:
-    if not hasattr(request.app.state, "hybridizer"):
-        raise NotImplementedError("get_hybridizer: wired in Phase 5")
     return request.app.state.hybridizer

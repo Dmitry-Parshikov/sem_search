@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sem_search — семантический поиск</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #222; }
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .search-box { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-box input { flex: 1; padding: 12px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
+  .search-box input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+  .search-box button { padding: 12px 24px; font-size: 16px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .search-box button:hover { background: #4338ca; }
+  .search-box button:disabled { background: #999; cursor: not-allowed; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center; }
+  .controls label { font-size: 13px; color: #555; }
+  .controls select, .controls input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .filters { display: flex; gap: 8px; margin-bottom: 20px; }
+  .filters input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .info { display: flex; gap: 16px; margin-bottom: 16px; font-size: 13px; color: #666; flex-wrap: wrap; }
+  .info span { background: #e8e8e8; padding: 4px 10px; border-radius: 12px; }
+  .error { background: #fee2e2; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+  .warning { background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 4px; }
+  .result { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 10px; transition: box-shadow .15s; }
+  .result:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .result-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .result-doc { font-weight: 600; font-size: 14px; color: #4f46e5; }
+  .result-score { font-size: 13px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; }
+  .result-text { font-size: 14px; line-height: 1.5; color: #333; }
+  .result-meta { font-size: 12px; color: #999; margin-top: 6px; }
+  .empty { text-align: center; color: #999; padding: 48px 0; font-size: 15px; }
+  .status { display: flex; gap: 12px; margin-bottom: 24px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .status-dot.ok { background: #22c55e; }
+  .status-dot.err { background: #ef4444; }
+  .loading { opacity: .6; pointer-events: none; }
+  hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>&#x1F50D; sem_search</h1>
+  <p class="subtitle">Семантическая поисковая система для русскоязычных текстов</p>
+
+  <div class="status" id="status">
+    <span id="status-vec">&#x2022; vector_store</span>
+    <span id="status-emb">&#x2022; embedder</span>
+    <span id="status-rerank">&#x2022; reranker</span>
+    <span id="status-ver"></span>
+  </div>
+
+  <div class="search-box">
+    <input id="query" type="text" placeholder="Введите поисковый запрос..." autofocus
+           onkeydown="if(event.key==='Enter')search()">
+    <button id="search-btn" onclick="search()">Найти</button>
+  </div>
+
+  <div class="controls">
+    <label>Режим:
+      <select id="mode">
+        <option value="hybrid_rerank">hybrid + rerank</option>
+        <option value="hybrid">hybrid (RRF)</option>
+        <option value="dense">dense (семантический)</option>
+        <option value="bm25">BM25 (лексический)</option>
+      </select>
+    </label>
+    <label>Результатов:
+      <select id="top_k">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="filters">
+    <input id="must_contain" type="text" placeholder="Обязательные слова (через запятую)">
+    <input id="must_exclude" type="text" placeholder="Исключаемые слова (через запятую)">
+  </div>
+
+  <div class="info" id="info" style="display:none">
+    <span id="info-mode"></span>
+    <span id="info-version"></span>
+    <span id="info-time"></span>
+    <span id="info-typo"></span>
+    <span id="info-expanded"></span>
+  </div>
+
+  <div id="error" class="error" style="display:none"></div>
+  <div id="warnings"></div>
+
+  <hr>
+
+  <details>
+  <summary style="cursor:pointer; font-weight:600; font-size:15px; margin-bottom:12px;">
+    &#x1F4C2; Индексация документов из папки
+  </summary>
+
+  <div style="margin-top:12px; background:#fff; border:1px solid #e5e5e5; border-radius:8px; padding:16px;">
+    <p style="font-size:13px;color:#666;margin-bottom:10px;">
+      Поддерживаются: <b>.txt</b>, <b>.md</b>, <b>.docx</b>, <b>.rtf</b> &middot;
+      Кодировка определяется автоматически.
+    </p>
+    <div class="search-box" style="margin-bottom:8px;">
+      <input id="folder-path" type="text" placeholder="C:\Users\...\папка_с_документами"
+             style="font-size:14px;">
+      <button id="index-btn" onclick="indexFolder()" style="background:#059669;">
+        Индексировать
+      </button>
+    </div>
+    <label style="font-size:13px;color:#555;">
+      Метка корпуса: <input id="source-label" value="folder" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:120px;">
+    </label>
+    <div id="index-result" style="margin-top:10px;font-size:13px;"></div>
+  </div>
+  </details>
+
+  <hr>
+
+  <div id="results"><div class="empty">Введите запрос и нажмите «Найти»</div></div>
+
+  <hr>
+  <p style="font-size:12px;color:#aaa;">
+    <a href="/docs" style="color:#aaa;">Swagger API</a> &middot;
+    <a href="/health" style="color:#aaa;">/health</a> &middot;
+    <a href="/admin/versions" style="color:#aaa;">/admin/versions</a>
+  </p>
+
+</div>
+
+<script>
+async function checkHealth() {
+  try {
+    const r = await fetch('/health');
+    const h = await r.json();
+    document.getElementById('status-vec').innerHTML = '<span class="status-dot '+(h.subsystems?.vector_store?'ok':'err')+'"></span> vector_store';
+    document.getElementById('status-emb').innerHTML = '<span class="status-dot '+(h.subsystems?.embedder?'ok':'err')+'"></span> embedder';
+    const rr = h.subsystems?.reranker;
+    const rrOk = rr === true;
+    const rrTxt = rr === 'disabled' ? 'отключён' : rrOk ? 'ok' : 'ошибка';
+    document.getElementById('status-rerank').innerHTML = '<span class="status-dot '+(rrOk?'ok':'err')+'"></span> reranker: '+rrTxt;
+    if (h.index_version) {
+      document.getElementById('status-ver').textContent = 'v: '+h.index_version.substring(0,20)+'...';
+    }
+  } catch(e) {
+    console.error('health check failed', e);
+  }
+}
+
+async function search() {
+  const btn = document.getElementById('search-btn');
+  const errDiv = document.getElementById('error');
+  const infoDiv = document.getElementById('info');
+  const warningsDiv = document.getElementById('warnings');
+  const resultsDiv = document.getElementById('results');
+
+  const query = document.getElementById('query').value.trim();
+  if (!query) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Ищем...';
+  errDiv.style.display = 'none';
+  warningsDiv.innerHTML = '';
+  infoDiv.style.display = 'none';
+
+  const mustContain = document.getElementById('must_contain').value
+    .split(',').map(s=>s.trim()).filter(Boolean);
+  const mustExclude = document.getElementById('must_exclude').value
+    .split(',').map(s=>s.trim()).filter(Boolean);
+
+  const body = {
+    query,
+    mode: document.getElementById('mode').value,
+    top_k: parseInt(document.getElementById('top_k').value),
+  };
+  if (mustContain.length) body.must_contain = mustContain;
+  if (mustExclude.length) body.must_exclude = mustExclude;
+
+  try {
+    const r = await fetch('/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+
+    if (!r.ok) {
+      const err = await r.json();
+      errDiv.textContent = 'Ошибка: ' + (err.detail || r.statusText);
+      errDiv.style.display = 'block';
+      resultsDiv.innerHTML = '';
+      return;
+    }
+
+    const data = await r.json();
+
+    // Info bar
+    infoDiv.style.display = 'flex';
+    document.getElementById('info-mode').textContent = 'режим: '+data.mode;
+    document.getElementById('info-version').textContent = 'версия: '+(data.index_version||'—').substring(0,20)+'...';
+    document.getElementById('info-time').textContent = 'время: '+(data.response_time_ms?.toFixed(1) || '—')+' мс';
+    document.getElementById('info-typo').textContent = data.typo_suggestion ? 'исправление: '+data.typo_suggestion : '';
+    document.getElementById('info-typo').style.display = data.typo_suggestion ? '' : 'none';
+    document.getElementById('info-expanded').textContent = data.expanded_query ? 'расширен: '+data.expanded_query : '';
+    document.getElementById('info-expanded').style.display = data.expanded_query ? '' : 'none';
+
+    // Warnings
+    if (data.warnings && data.warnings.length) {
+      warningsDiv.innerHTML = data.warnings.map(w => '<div class="warning">&#x26A0; '+w+'</div>').join('');
+    }
+
+    // Results
+    if (!data.hits || !data.hits.length) {
+      resultsDiv.innerHTML = '<div class="empty">Ничего не найдено</div>';
+      return;
+    }
+
+    resultsDiv.innerHTML = data.hits.map((h, i) => `
+      <div class="result">
+        <div class="result-header">
+          <span class="result-doc">#${i+1} &mdash; ${h.doc_id} &middot; ${h.chunk_id}</span>
+          <span class="result-score">score: ${h.score.toFixed(4)}</span>
+        </div>
+        <div class="result-text">${h.text}</div>
+        <div class="result-meta">source: ${h.metadata?.source || '—'}</div>
+      </div>
+    `).join('');
+
+  } catch(e) {
+    errDiv.textContent = 'Сетевая ошибка: ' + e.message;
+    errDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Найти';
+  }
+}
+
+async function indexFolder() {
+  const btn = document.getElementById('index-btn');
+  const resultDiv = document.getElementById('index-result');
+  const folderPath = document.getElementById('folder-path').value.trim();
+  if (!folderPath) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Индексирую...';
+  resultDiv.innerHTML = '<span style="color:#888;">⏳ Сканирую папку...</span>';
+
+  try {
+    const r = await fetch('/index-from-folder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        folder_path: folderPath,
+        source_label: document.getElementById('source-label').value || 'folder',
+      }),
+    });
+
+    if (!r.ok) {
+      const err = await r.json();
+      const detail = typeof err.detail === 'object' ? JSON.stringify(err.detail, null, 2) : err.detail;
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Ошибка: '+detail+'</span>';
+      return;
+    }
+
+    const data = await r.json();
+    let html = '<span style="color:#059669;">✅ Проиндексировано: <b>'+data.documents_indexed+'</b> документов, <b>'+data.chunk_count+'</b> чанков</span>';
+    html += '<br><span style="color:#888;">Версия: '+data.index_version.substring(0,24)+'...</span>';
+
+    if (data.errors && data.errors.length) {
+      html += '<br><br><span style="color:#b91c1c;">⚠ Ошибки при чтении ('+data.errors.length+' файлов):</span>';
+      html += '<ul style="margin-top:4px;color:#888;">';
+      for (const e of data.errors) {
+        html += '<li><b>'+e.path.split('\\').pop()+'</b>: '+e.error+'</li>';
+      }
+      html += '</ul>';
+    }
+
+    resultDiv.innerHTML = html;
+    // Refresh health to show new version
+    setTimeout(checkHealth, 500);
+  } catch(e) {
+    resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Сетевая ошибка: '+e.message+'</span>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Индексировать';
+  }
+}
+
+checkHealth();
+</script>
+</body>
+</html>

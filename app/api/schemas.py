@@ -115,3 +115,24 @@ class RollbackResponse(BaseModel):
     document_count: int
     chunk_count: int
     source_corpus: str
+
+
+class FolderIndexRequest(BaseModel):
+    """POST /index-from-folder: path to a local folder with documents."""
+
+    folder_path: str = Field(..., description="Absolute path to a folder with documents")
+    source_label: str = Field("folder", description="Source corpus label for versioning")
+
+
+class FileError(BaseModel):
+    path: str
+    suffix: str | None = None
+    error: str
+
+
+class FolderIndexResponse(BaseModel):
+    index_version: str
+    documents_found: int
+    documents_indexed: int
+    chunk_count: int
+    errors: list[FileError] = Field(default_factory=list)

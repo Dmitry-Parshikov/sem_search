@@ -29,7 +29,7 @@ class EmbeddingConfig(BaseModel):
 
 class FixedWindowConfig(BaseModel):
     chunk_size: int = 256
-    overlap: int = 32
+    overlap: int = 51  # ~20% of 256 tokens
     unit: Literal["tokens", "chars"] = "tokens"
 
 
@@ -43,7 +43,7 @@ class ParagraphConfig(BaseModel):
 
 
 class ChunkingConfig(BaseModel):
-    strategy: Literal["fixed_window", "sentence_window", "paragraph"] = "sentence_window"
+    strategy: Literal["fixed_window", "sentence_window", "paragraph"] = "fixed_window"
     fixed_window: FixedWindowConfig = FixedWindowConfig()
     sentence_window: SentenceWindowConfig = SentenceWindowConfig()
     paragraph: ParagraphConfig = ParagraphConfig()

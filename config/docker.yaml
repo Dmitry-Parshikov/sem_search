@@ -18,10 +18,10 @@ embedding:
   passage_prefix: "passage: "
 
 chunking:
-  strategy: "sentence_window"
+  strategy: "fixed_window"
   fixed_window:
     chunk_size: 256
-    overlap: 32
+    overlap: 51    # ~20% of 256 tokens
     unit: "tokens"
   sentence_window:
     window_sentences: 3

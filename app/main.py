@@ -5,10 +5,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 from app.admin.query_log import QueryLogger
 from app.admin.service import AdminService
-from app.api import routes_admin, routes_health, routes_index, routes_reindex, routes_search
+from app.api import routes_admin, routes_folder_index, routes_health, routes_index, routes_reindex, routes_search
 from app.chunking.factory import build_chunker
 from app.config import Settings
 from app.embedding.factory import get_or_build_embedder
@@ -108,6 +109,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_health.router)
     app.include_router(routes_search.router)
     app.include_router(routes_admin.router)
+    app.include_router(routes_folder_index.router)
+
+    _TEMPLATE = Path(__file__).resolve().parent / "templates" / "search.html"
+    _HTML = _TEMPLATE.read_text(encoding="utf-8") if _TEMPLATE.exists() else "<h1>sem_search</h1>"
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def index():
+        return _HTML
 
     return app
 

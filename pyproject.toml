@@ -2,6 +2,7 @@
 testpaths = ["tests"]
 markers = [
     "slow: tests that load real ML models (sentence-transformers, etc.) or are otherwise slow; run with the full `pytest` invocation, skip via `pytest -m \"not slow\"`.",
+    "e2e: end-to-end quality tests that exercise the system only through its public HTTP API (index -> search) and compute IR metrics (NDCG@10 / Recall@10). Also marked `slow`.",
 ]
 
 # NOTE: this file exists solely to hold pytest configuration ([tool.pytest.ini_options]).

@@ -4,6 +4,21 @@ markers = [
     "slow: tests that load real ML models (sentence-transformers, etc.) or are otherwise slow; run with the full `pytest` invocation, skip via `pytest -m \"not slow\"`.",
 ]
 
-# NOTE: this file exists solely to hold pytest configuration ([tool.pytest.ini_options]).
+# Coverage (pytest-cov) is opt-in via the command line so ordinary/`-m "not
+# slow"` runs stay fast, e.g.:
+#   pytest --cov=app --cov-report=term --cov-report=html
+# The [tool.coverage.*] tables below configure what that measures/reports.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# NOTE: this file exists solely to hold pytest/coverage configuration.
 # `requirements.txt` remains the single source of truth for dependencies --
 # this is not a packaging pyproject.toml (no [build-system]/[project] table).

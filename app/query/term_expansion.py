@@ -1,10 +1,16 @@
 """Ф2.4: query expansion via a simple, code-independent term dictionary
 (`config/terms_dictionary.yaml`, format `термин: [синонимы/раскрытия]`) --
 editable without touching the code, per spec.
+
+Also hosts the pluggable abbreviation dictionary (`data/abbrev_dict.json`,
+format `"аббревиатура": "расшифровка"`): a separate, toggleable source of
+expansions loaded via `load_abbrev_dictionary` and applied through the same
+`DictTermExpander`, so abbreviation and synonym expansion share one code path.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -25,6 +31,22 @@ def load_term_dictionary(path: Path) -> dict[str, list[str]]:
         data = yaml.safe_load(fh) or {}
 
     return {str(key): [str(v) for v in (value or [])] for key, value in data.items()}
+
+
+def load_abbrev_dictionary(path: Path) -> dict[str, list[str]]:
+    """Loads the `"аббревиатура": "расшифровка"` JSON dictionary and normalizes
+    it into the `{key: [expansion]}` shape `DictTermExpander` consumes. A
+    missing or malformed file yields an empty dictionary rather than raising,
+    so a disabled/misconfigured abbreviation source degrades to "no
+    expansions" instead of crashing the app at startup (graceful, per spec)."""
+
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh) or {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+    return {str(key): [str(value)] for key, value in data.items()}
 
 
 class DictTermExpander(TermExpander):
@@ -49,6 +71,22 @@ class DictTermExpander(TermExpander):
             return query
 
         return query + " " + " ".join(appended)
+
+
+class CompositeTermExpander(TermExpander):
+    """Applies several expanders in sequence (e.g. synonym dictionary +
+    abbreviation dictionary), each appending to the query produced by the
+    previous one. Used to keep both expansion sources pluggable independently
+    while still exposing a single `TermExpander` to `SearchService`."""
+
+    def __init__(self, expanders: list[TermExpander]) -> None:
+        self._expanders = expanders
+
+    def expand(self, query: str) -> str:
+        result = query
+        for expander in self._expanders:
+            result = expander.expand(result)
+        return result
 
 
 def _contains_whole_phrase(text: str, phrase: str) -> bool:

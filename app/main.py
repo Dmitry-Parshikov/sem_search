@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,7 +19,7 @@ from app.indexing.service import IndexingService
 from app.lexical.base import LexicalIndex
 from app.lexical.factory import build_lexical_index
 from app.preprocessing.loaders import TextPreprocessor
-from app.query.factory import build_term_expander, build_typo_corrector
+from app.query.factory import build_query_expander, build_typo_corrector
 from app.rerank.factory import get_or_build_reranker
 from app.search.active_index import ActiveIndexResolver
 from app.search.service import SearchService
@@ -28,7 +29,11 @@ from app.vector_store.factory import build_vector_store
 def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], AsyncIterator[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        settings = settings_override or Settings.load()
+        # `SEM_SEARCH_CONFIG` selects the config profile (e.g. the
+        # resource-saving profile `config/config.resource_saving.yaml`)
+        # without code changes; defaults to the main `config/config.yaml`.
+        config_path = os.environ.get("SEM_SEARCH_CONFIG", "config/config.yaml")
+        settings = settings_override or Settings.load(config_path)
         app.state.settings = settings
 
         # Built once per process: embedder (Ф2.5 — same instance for
@@ -63,7 +68,7 @@ def _make_lifespan(settings_override: Settings | None) -> Callable[[FastAPI], As
         # disabled via config. `SearchService` skips a stage entirely when its
         # collaborator is None.
         app.state.typo_corrector = build_typo_corrector(settings.query_processing.typo_correction)
-        app.state.term_expander = build_term_expander(settings.query_processing.term_expansion)
+        app.state.term_expander = build_query_expander(settings.query_processing)
 
         # Reranker (cross-encoder, Ф3.5): `None` when `reranking.enabled` is
         # False. When enabled, a `.rerank()` exception is caught inside

@@ -1,0 +1,76 @@
+# Ресурсосберегающий профиль.
+# Запуск: SEM_SEARCH_CONFIG=config/config.resource_saving.yaml uvicorn app.main:app
+#
+# USER2-base + fixed_60 + режим по умолчанию dense (без BM25/гибридизации на
+# каждом запросе). Реранкер опционален и по умолчанию выключен ради экономии
+# ресурсов — при необходимости включается reranking.enabled: true (модель
+# BAAI/bge-reranker-v2-m3 уже прописана) и режимом dense_rerank.
+
+app:
+  name: "sem_search"
+  log_level: "INFO"
+  data_dir: "./data"
+
+embedding:
+  model_name: "deepvk/USER2-base"
+  device: "cpu"
+  batch_size: 16
+  query_prefix: "classification: "
+  passage_prefix: "classification: "
+
+chunking:
+  strategy: "fixed_60"
+  fixed_60:
+    context_limit: 512
+    window_ratio: 0.6
+    overlap_ratio: 0.2
+    unit: "tokens"
+
+lexical:
+  use_lemmatization: true
+  match_mode: "lemma"
+  bm25:
+    k1: 1.5
+    b: 0.75
+
+vector_store:
+  backend: "qdrant"
+  qdrant:
+    mode: "embedded"
+    path: "./data/qdrant"
+    url: "http://qdrant:6333"
+    collection_name: "sem_search_chunks"
+
+retrieval:
+  candidate_k: 50
+
+hybridization:
+  method: "rrf"
+  rrf_k: 60
+
+reranking:
+  enabled: false
+  model_name: "BAAI/bge-reranker-v2-m3"
+  device: "cpu"
+  top_n: 50
+  batch_size: 16
+
+query_processing:
+  typo_correction:
+    enabled: true
+    max_distance: 2
+    score_cutoff: 80.0
+  term_expansion:
+    enabled: true
+    dictionary_path: "./config/terms_dictionary.yaml"
+  expansion_enabled: true
+  abbrev_dict_path: "./data/abbrev_dict.json"
+
+search:
+  default_mode: "dense"
+  default_top_k: 10
+
+admin:
+  manifest_path: "./data/index_manifest.json"
+  query_log_path: "./data/logs/queries.jsonl"
+  lexical_index_dir: "./data/lexical"

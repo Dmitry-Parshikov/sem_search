@@ -52,7 +52,7 @@ class HealthResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
-    mode: Literal["dense", "bm25", "hybrid", "hybrid_rerank"] | None = None
+    mode: Literal["dense", "bm25", "hybrid", "dense_rerank", "hybrid_rerank"] | None = None
     top_k: int | None = None
     must_contain: list[str] = Field(default_factory=list)
     must_exclude: list[str] = Field(default_factory=list)

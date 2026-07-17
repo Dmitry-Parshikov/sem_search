@@ -5,6 +5,8 @@ Modes:
 - `bm25`: lexical BM25 search with optional Russian lemmatization.
 - `hybrid`: RRF or weighted fusion of dense + BM25, followed by
   must_contain/must_exclude post-filtering (applies in ALL modes).
+- `dense_rerank`: dense retrieval + filtering + cross-encoder reranking of the
+  top-N candidates, without any BM25/fusion step.
 - `hybrid_rerank`: hybrid retrieval + fusion + filtering + cross-encoder
   reranking of the top-N candidates.
 
@@ -40,7 +42,7 @@ from app.vector_store.base import VectorStore
 
 logger = structlog.get_logger(__name__)
 
-_VALID_MODES = ("dense", "bm25", "hybrid", "hybrid_rerank")
+_VALID_MODES = ("dense", "bm25", "hybrid", "dense_rerank", "hybrid_rerank")
 
 
 @dataclass(frozen=True)
@@ -149,10 +151,8 @@ class SearchService:
         pool_size = max(self._settings.retrieval.candidate_k, top_k)
 
         if mode == "dense":
-            retriever = DenseRetriever(self._embedder, self._vector_store)
-            candidates = retriever.retrieve(effective_query, context.collection_name, pool_size)
-            filtered = apply_must_contain_exclude(
-                candidates, must_contain or [], must_exclude or [], context.lexical_index
+            filtered = self._dense_candidates(
+                effective_query, context, pool_size, must_contain, must_exclude
             )
         elif mode == "bm25":
             retriever = BM25Retriever(context.lexical_index)
@@ -164,21 +164,18 @@ class SearchService:
             filtered = self._hybrid_candidates(
                 effective_query, context, pool_size, must_contain, must_exclude
             )
+        elif mode == "dense_rerank":
+            # Dense retrieval -> must_contain/exclude filter -> cross-encoder
+            # rerank, with NO BM25/fusion step (unlike `hybrid_rerank`).
+            filtered = self._dense_candidates(
+                effective_query, context, pool_size, must_contain, must_exclude
+            )
+            filtered = self._apply_rerank(effective_query, filtered, warnings)
         else:  # mode == "hybrid_rerank"
             filtered = self._hybrid_candidates(
                 effective_query, context, pool_size, must_contain, must_exclude
             )
-            if self._reranker is not None:
-                try:
-                    filtered = self._reranker.rerank(
-                        effective_query, filtered, top_n=self._settings.reranking.top_n
-                    )
-                except Exception as exc:  # noqa: BLE001 -- optional stage must never fail the request
-                    logger.warning("reranking_failed", query=effective_query, error=str(exc))
-                    warnings.append(f"Reranker failed and was skipped: {exc}")
-                    # `filtered` is left as-is: the pre-rerank, hybrid-fused
-                    # and filtered candidate list -- i.e. degrade to plain
-                    # `hybrid` behavior for this request.
+            filtered = self._apply_rerank(effective_query, filtered, warnings)
 
         # Truncate to the caller's requested top_k. `SearchHit` carries no
         # `rank` field (informational rank isn't consumed downstream yet), so
@@ -214,6 +211,46 @@ class SearchService:
             logger.warning("query_log_write_failed", query=query, error=str(exc))
 
         return result
+
+    def _dense_candidates(
+        self,
+        effective_query: str,
+        context: ActiveIndexContext,
+        pool_size: int,
+        must_contain: list[str] | None,
+        must_exclude: list[str] | None,
+    ) -> list[RetrievedCandidate]:
+        """Shared by `dense` and `dense_rerank`: dense ANN retrieval followed
+        by the strict must_contain/exclude filter (Ф3.4). `dense_rerank` adds
+        cross-encoder reranking on top of this same, already-filtered list."""
+
+        retriever = DenseRetriever(self._embedder, self._vector_store)
+        candidates = retriever.retrieve(effective_query, context.collection_name, pool_size)
+        return apply_must_contain_exclude(
+            candidates, must_contain or [], must_exclude or [], context.lexical_index
+        )
+
+    def _apply_rerank(
+        self,
+        effective_query: str,
+        filtered: list[RetrievedCandidate],
+        warnings: list[str],
+    ) -> list[RetrievedCandidate]:
+        """Cross-encoder reranking shared by `dense_rerank` and
+        `hybrid_rerank`. On any reranker failure the request degrades to the
+        pre-rerank candidate order plus a logged warning (NFR "Надёжность"),
+        never failing."""
+
+        if self._reranker is None:
+            return filtered
+        try:
+            return self._reranker.rerank(
+                effective_query, filtered, top_n=self._settings.reranking.top_n
+            )
+        except Exception as exc:  # noqa: BLE001 -- optional stage must never fail the request
+            logger.warning("reranking_failed", query=effective_query, error=str(exc))
+            warnings.append(f"Reranker failed and was skipped: {exc}")
+            return filtered
 
     def _hybrid_candidates(
         self,

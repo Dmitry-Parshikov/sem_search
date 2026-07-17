@@ -9,7 +9,7 @@ from app.config import ChunkingConfig
 
 def build_chunker(cfg: ChunkingConfig) -> Chunker:
     params = cfg.active_params()
-    if cfg.strategy == "fixed_window":
+    if cfg.strategy in ("fixed_window", "fixed_60"):
         return FixedWindowChunker(
             chunk_size=params.chunk_size,
             overlap=params.overlap,

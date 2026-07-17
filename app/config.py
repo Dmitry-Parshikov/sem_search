@@ -33,6 +33,27 @@ class FixedWindowConfig(BaseModel):
     unit: Literal["tokens", "chars"] = "tokens"
 
 
+class Fixed60Config(BaseModel):
+    """Relative fixed-window strategy: the window is ~60% of the embedding
+    model's context limit (with proportional overlap), so chunking follows the
+    model rather than a hard-coded token count. `chunk_size`/`overlap` are
+    derived from `context_limit` and the two ratios and consumed by the same
+    `FixedWindowChunker` as `fixed_window`."""
+
+    context_limit: int = 512
+    window_ratio: float = 0.6
+    overlap_ratio: float = 0.2
+    unit: Literal["tokens", "chars"] = "tokens"
+
+    @property
+    def chunk_size(self) -> int:
+        return max(1, int(self.context_limit * self.window_ratio))
+
+    @property
+    def overlap(self) -> int:
+        return min(self.chunk_size - 1, int(self.chunk_size * self.overlap_ratio))
+
+
 class SentenceWindowConfig(BaseModel):
     window_sentences: int = 3
     stride_sentences: int = 2
@@ -43,8 +64,9 @@ class ParagraphConfig(BaseModel):
 
 
 class ChunkingConfig(BaseModel):
-    strategy: Literal["fixed_window", "sentence_window", "paragraph"] = "fixed_window"
+    strategy: Literal["fixed_window", "fixed_60", "sentence_window", "paragraph"] = "fixed_window"
     fixed_window: FixedWindowConfig = FixedWindowConfig()
+    fixed_60: Fixed60Config = Fixed60Config()
     sentence_window: SentenceWindowConfig = SentenceWindowConfig()
     paragraph: ParagraphConfig = ParagraphConfig()
 
@@ -113,10 +135,16 @@ class TermExpansionConfig(BaseModel):
 class QueryProcessingConfig(BaseModel):
     typo_correction: TypoCorrectionConfig = TypoCorrectionConfig()
     term_expansion: TermExpansionConfig = TermExpansionConfig()
+    # Pluggable abbreviation expansion: appends the full form of any known
+    # abbreviation found in the query (dictionary loaded from
+    # `abbrev_dict_path`). Disabled by default; missing dictionary degrades to
+    # a no-op rather than failing.
+    expansion_enabled: bool = False
+    abbrev_dict_path: str = "./data/abbrev_dict.json"
 
 
 class SearchConfig(BaseModel):
-    default_mode: Literal["dense", "bm25", "hybrid", "hybrid_rerank"] = "hybrid_rerank"
+    default_mode: Literal["dense", "bm25", "hybrid", "dense_rerank", "hybrid_rerank"] = "hybrid_rerank"
     default_top_k: int = 10
 
 

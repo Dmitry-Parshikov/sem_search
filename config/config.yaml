@@ -1,10 +1,8 @@
-# Дефолты см. также в app/config.py — здесь только то, что имеет смысл
-# явно зафиксировать в файле для наглядности/защиты ВКР.
-#
-# DEV-профиль (используется по умолчанию во время разработки и в тестах):
-# лёгкие модели ради быстрых циклов правки. Перед финальной сдачей
-# embedding.model_name и reranking.model_name переключаются на модели,
-# рекомендованные ТЗ (BAAI/bge-m3, BAAI/bge-reranker-v2-m3) — см. README.
+# Дефолты см. также в app/config.py — здесь фиксируется итоговая,
+# экспериментально обоснованная конфигурация (выводы гл.2):
+# эмбеддер deepvk/USER2-base с префиксами "classification: ", чанкинг
+# fixed_60 (окно ~60% контекстного лимита модели), реранкер
+# BAAI/bge-reranker-v2-m3 на глубину 50, режим по умолчанию — dense.
 
 app:
   name: "sem_search"
@@ -12,14 +10,19 @@ app:
   data_dir: "./data"
 
 embedding:
-  model_name: "intfloat/multilingual-e5-small"
+  model_name: "deepvk/USER2-base"
   device: "cpu"
   batch_size: 32
-  query_prefix: "query: "
-  passage_prefix: "passage: "
+  query_prefix: "classification: "
+  passage_prefix: "classification: "
 
 chunking:
-  strategy: "fixed_window"
+  strategy: "fixed_60"
+  fixed_60:
+    context_limit: 512    # контекстный лимит модели в токенах
+    window_ratio: 0.6     # окно ~60% лимита
+    overlap_ratio: 0.2    # перекрытие ~20% окна
+    unit: "tokens"
   fixed_window:
     chunk_size: 256
     overlap: 51    # ~20% of 256 tokens
@@ -58,7 +61,7 @@ hybridization:
 
 reranking:
   enabled: true
-  model_name: "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+  model_name: "BAAI/bge-reranker-v2-m3"
   device: "cpu"
   top_n: 50
   batch_size: 16
@@ -71,9 +74,11 @@ query_processing:
   term_expansion:
     enabled: true
     dictionary_path: "./config/terms_dictionary.yaml"
+  expansion_enabled: true
+  abbrev_dict_path: "./data/abbrev_dict.json"
 
 search:
-  default_mode: "hybrid_rerank"
+  default_mode: "dense"
   default_top_k: 10
 
 admin:

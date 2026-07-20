@@ -2,7 +2,7 @@
 # экспериментально обоснованная конфигурация (выводы гл.2):
 # эмбеддер deepvk/USER2-base с префиксами "classification: ", чанкинг
 # fixed_60 (окно ~60% контекстного лимита модели), реранкер
-# BAAI/bge-reranker-v2-m3 на глубину 50, режим по умолчанию — dense.
+# BAAI/bge-reranker-v2-m3 на глубину 20, слияние RRF с k=2, режим по умолчанию — dense.
 
 app:
   name: "sem_search"
@@ -53,7 +53,7 @@ retrieval:
 
 hybridization:
   method: "rrf"
-  rrf_k: 60
+  rrf_k: 2
   weighted:
     dense_weight: 0.5
     lexical_weight: 0.5
@@ -63,7 +63,7 @@ reranking:
   enabled: true
   model_name: "BAAI/bge-reranker-v2-m3"
   device: "cpu"
-  top_n: 50
+  top_n: 20
   batch_size: 16
 
 query_processing:

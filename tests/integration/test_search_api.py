@@ -152,6 +152,10 @@ def test_search_before_any_indexing_returns_404(fresh_client):
 def test_search_uses_default_mode_and_top_k_when_omitted(client, _index_sample_corpus):
     response = client.post("/search", json={"query": "аренда"})
 
-    # default_mode is "hybrid_rerank" per config.py.
+    # При отсутствии mode/top_k применяются значения по умолчанию из
+    # конфигурации (search.default_mode / search.default_top_k).
     assert response.status_code == 200
-    assert response.json()["mode"] == "hybrid_rerank"
+    body = response.json()
+    settings = client.app.state.settings
+    assert body["mode"] == settings.search.default_mode
+    assert len(body["hits"]) <= settings.search.default_top_k

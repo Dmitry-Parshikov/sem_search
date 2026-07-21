@@ -70,6 +70,32 @@ def save_corpus(documents: list[Document], data_dir: Path, source_corpus: str) -
     return path
 
 
+def delete_document(data_dir: Path, source_corpus: str, doc_id: str) -> tuple[bool, int]:
+    """Remove a single document from the persisted corpus JSON.
+
+    Returns ``(deleted: bool, remaining_count: int)``.
+    Raises ``FileNotFoundError`` if the corpus does not exist.
+    """
+    path = _corpus_path(data_dir, source_corpus)
+    if not path.exists():
+        raise FileNotFoundError(f"No persisted corpus found for source_corpus={source_corpus!r} at {path}")
+
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    original_len = len(payload)
+    filtered = [d for d in payload if d.get("doc_id") != doc_id]
+    removed = original_len - len(filtered)
+
+    if removed:
+        tmp_path = path.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(filtered, f, ensure_ascii=False, indent=2)
+        tmp_path.replace(path)
+
+    return removed > 0, len(filtered)
+
+
 def load_corpus(data_dir: Path, source_corpus: str) -> list[Document]:
     """Raises `FileNotFoundError` if no corpus was ever persisted under this
     `source_corpus` name (caller -- `routes_reindex` -- turns this into a

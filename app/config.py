@@ -127,20 +127,15 @@ class TypoCorrectionConfig(BaseModel):
     score_cutoff: float = 80.0
 
 
-class TermExpansionConfig(BaseModel):
-    enabled: bool = True
-    dictionary_path: str = "./config/terms_dictionary.yaml"
-
-
 class QueryProcessingConfig(BaseModel):
     typo_correction: TypoCorrectionConfig = TypoCorrectionConfig()
-    term_expansion: TermExpansionConfig = TermExpansionConfig()
-    # Pluggable abbreviation expansion: appends the full form of any known
-    # abbreviation found in the query (dictionary loaded from
-    # `abbrev_dict_path`). Disabled by default; missing dictionary degrades to
-    # a no-op rather than failing.
-    expansion_enabled: bool = False
-    abbrev_dict_path: str = "./data/abbrev_dict.json"
+    # Unified dictionary-based query expansion: every .json / .yaml file in
+    # `dictionaries_dir` is loaded as a dictionary.  Each dictionary maps a
+    # word/phrase to its expansion(s).  When a query contains a dictionary
+    # key, the expansion is appended to the query (whole-phrase match,
+    # case-insensitive).
+    dictionaries_enabled: bool = True
+    dictionaries_dir: str = "./data/dictionaries"
 
 
 class SearchConfig(BaseModel):

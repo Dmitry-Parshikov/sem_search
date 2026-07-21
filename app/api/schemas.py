@@ -122,6 +122,7 @@ class FolderIndexRequest(BaseModel):
 
     folder_path: str = Field(..., description="Absolute path to a folder with documents")
     source_label: str = Field("folder", description="Source corpus label for versioning")
+    mode: str = Field("replace", description="'replace' — full replacement; 'append' — add to existing corpus")
 
 
 class FileError(BaseModel):
@@ -136,3 +137,105 @@ class FolderIndexResponse(BaseModel):
     documents_indexed: int
     chunk_count: int
     errors: list[FileError] = Field(default_factory=list)
+
+
+# ── Admin config response (GET /admin/config) ──────────────────────────
+
+class EmbeddingConfigOut(BaseModel):
+    model_name: str
+    device: str
+    batch_size: int
+    query_prefix: str
+    passage_prefix: str
+
+
+class ChunkingConfigOut(BaseModel):
+    strategy: str
+    params: dict[str, Any]
+
+
+class RerankingConfigOut(BaseModel):
+    enabled: bool
+    model_name: str
+    device: str
+    top_n: int
+    batch_size: int
+
+
+class HybridizationConfigOut(BaseModel):
+    method: str
+    rrf_k: int
+
+
+class TypoCorrectionConfigOut(BaseModel):
+    enabled: bool
+    max_distance: int
+    score_cutoff: float
+
+
+class QueryProcessingConfigOut(BaseModel):
+    typo_correction: TypoCorrectionConfigOut
+    dictionaries_enabled: bool
+    dictionaries_dir: str
+
+
+class SearchConfigOut(BaseModel):
+    default_mode: str
+    default_top_k: int
+
+
+class AdminConfigResponse(BaseModel):
+    config_profile: str
+    embedding: EmbeddingConfigOut
+    chunking: ChunkingConfigOut
+    reranking: RerankingConfigOut
+    hybridization: HybridizationConfigOut
+    query_processing: QueryProcessingConfigOut
+    search: SearchConfigOut
+
+
+class CorpusInfo(BaseModel):
+    name: str
+    document_count: int
+    size_bytes: int
+    last_modified: str
+
+
+class CorporaResponse(BaseModel):
+    corpora: list[CorpusInfo]
+
+
+class CorpusDocumentInfo(BaseModel):
+    doc_id: str
+    text_preview: str
+    text_length: int
+
+
+class CorpusDetailResponse(BaseModel):
+    name: str
+    document_count: int
+    documents: list[CorpusDocumentInfo]
+
+
+class DeleteDocumentResponse(BaseModel):
+    deleted: bool
+    doc_id: str
+    corpus: str
+    message: str = ""
+
+
+# ── Dictionaries API ────────────────────────────────────────────────
+
+class DictionaryInfo(BaseModel):
+    filename: str
+    entry_count: int
+    size_bytes: int
+
+
+class DictionariesResponse(BaseModel):
+    enabled: bool
+    dictionaries: list[DictionaryInfo]
+
+
+class DictionaryToggleRequest(BaseModel):
+    enabled: bool

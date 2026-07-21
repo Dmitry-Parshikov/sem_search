@@ -102,3 +102,74 @@ def load_folder(
         )
 
     return successes, errors
+
+
+def load_files(
+    files: list[tuple[str, bytes, str]],
+    source_label: str = "upload",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Process a list of ``(filename, raw_bytes, suffix)`` uploaded from the
+    browser (where we only have the file *contents*, not a disk path).
+
+    Returns ``(successes, errors)`` in the same shape as :func:`load_folder`
+    so the indexing pipeline is identical from this point onward.
+    """
+    successes: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for filename, raw_bytes, suffix in files:
+        suffix_lower = suffix.lower()
+        if suffix_lower not in _READERS:
+            errors.append(
+                {"path": filename, "suffix": suffix, "error": f"Unsupported file type: {suffix}"}
+            )
+            continue
+
+        reader = _READERS[suffix_lower]
+        doc_id = Path(filename).stem
+
+        try:
+            if suffix_lower in (".txt", ".md"):
+                text = _detect_encoding(raw_bytes)
+            elif suffix_lower == ".docx":
+                from io import BytesIO
+
+                from docx import Document
+
+                doc = Document(BytesIO(raw_bytes))
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                text = "\n".join(paragraphs)
+            elif suffix_lower == ".rtf":
+                from striprtf.striprtf import rtf_to_text
+
+                text = rtf_to_text(raw_bytes.decode("utf-8", errors="replace"))
+            else:
+                errors.append(
+                    {"path": filename, "suffix": suffix, "error": f"No reader for {suffix}"}
+                )
+                continue
+        except Exception as exc:
+            errors.append(
+                {
+                    "path": filename,
+                    "suffix": suffix,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
+
+        if not text or not text.strip():
+            errors.append(
+                {"path": filename, "suffix": suffix, "error": "Empty or unreadable content"}
+            )
+            continue
+
+        successes.append(
+            {
+                "doc_id": doc_id,
+                "text": text.strip(),
+                "source": source_label,
+            }
+        )
+
+    return successes, errors

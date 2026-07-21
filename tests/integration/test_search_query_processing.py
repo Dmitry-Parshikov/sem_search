@@ -20,7 +20,6 @@ from app.config import (
     QdrantConfig,
     QueryProcessingConfig,
     Settings,
-    TermExpansionConfig,
     VectorStoreConfig,
 )
 from app.main import create_app
@@ -48,7 +47,7 @@ DOCS = [
 ]
 
 
-def _build_settings(root: Path, terms_path: Path) -> Settings:
+def _build_settings(root: Path, dicts_dir: Path) -> Settings:
     return Settings(
         app=AppMeta(data_dir=str(root)),
         admin=AdminConfig(
@@ -63,25 +62,24 @@ def _build_settings(root: Path, terms_path: Path) -> Settings:
                 collection_name="qp_chunks",
             )
         ),
-        # Test-specific term dictionary (not the real project
-        # config/terms_dictionary.yaml, which may change independently) --
-        # injected via a Settings override, same pattern conftest.py uses for
-        # admin.manifest_path etc.
         query_processing=QueryProcessingConfig(
-            term_expansion=TermExpansionConfig(enabled=True, dictionary_path=str(terms_path)),
+            dictionaries_enabled=True,
+            dictionaries_dir=str(dicts_dir),
         ),
     )
 
 
 @pytest.fixture()
 def qp_client(tmp_path: Path):
-    """A dedicated app/client per test with its own temp `terms_dictionary
-    .yaml` ("бд" -> "база данных") and its own empty index."""
+    """A dedicated app/client per test with its own temp dictionary dir
+    containing a terms YAML ("бд" -> "база данных") and its own empty index."""
 
-    terms_path = tmp_path / "terms_dictionary.yaml"
+    dicts_dir = tmp_path / "dictionaries"
+    dicts_dir.mkdir()
+    terms_path = dicts_dir / "terms_dictionary.yaml"
     terms_path.write_text("бд:\n  - база данных\n", encoding="utf-8")
 
-    settings = _build_settings(tmp_path, terms_path)
+    settings = _build_settings(tmp_path, dicts_dir)
     app = create_app(settings=settings)
     with TestClient(app) as test_client:
         yield test_client

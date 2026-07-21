@@ -1,11 +1,20 @@
-"""Ф2.4: query expansion via a simple, code-independent term dictionary
-(`config/terms_dictionary.yaml`, format `термин: [синонимы/раскрытия]`) --
-editable without touching the code, per spec.
+"""Ф2.4: query expansion via pluggable dictionaries.
 
-Also hosts the pluggable abbreviation dictionary (`data/abbrev_dict.json`,
-format `"аббревиатура": "расшифровка"`): a separate, toggleable source of
-expansions loaded via `load_abbrev_dictionary` and applied through the same
-`DictTermExpander`, so abbreviation and synonym expansion share one code path.
+Any ``.json`` or ``.yaml`` file placed in the configured ``dictionaries_dir``
+is loaded as a dictionary mapping ``word → expansion(s)``.  Both formats are
+supported:
+
+JSON:
+    {"аббревиатура": "расшифровка", "термин": "синоним"}
+
+YAML:
+    термин:
+      - синоним1
+      - синоним2
+    другой_термин: раскрытие
+
+When a dictionary key is found in the query (whole-phrase, case-insensitive),
+its expansion(s) are appended to the query.
 """
 
 from __future__ import annotations
@@ -21,38 +30,38 @@ from app.query.base import TermExpander
 _BOUNDARY_CHARS = r"а-яёa-z0-9"
 
 
-def load_term_dictionary(path: Path) -> dict[str, list[str]]:
-    """Loads the `термин: [синонимы]` YAML dictionary used by
-    `DictTermExpander`. Missing/empty file yields an empty dictionary rather
-    than raising, so a misconfigured path degrades to "no expansions" instead
-    of crashing the whole app at startup."""
-
-    with open(path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-
-    return {str(key): [str(v) for v in (value or [])] for key, value in data.items()}
-
-
-def load_abbrev_dictionary(path: Path) -> dict[str, list[str]]:
-    """Loads the `"аббревиатура": "расшифровка"` JSON dictionary and normalizes
-    it into the `{key: [expansion]}` shape `DictTermExpander` consumes. A
-    missing or malformed file yields an empty dictionary rather than raising,
-    so a disabled/misconfigured abbreviation source degrades to "no
-    expansions" instead of crashing the app at startup (graceful, per spec)."""
+def load_dictionary(path: Path) -> dict[str, list[str]]:
+    """Load a single dictionary file (JSON or YAML) and normalise every value
+    to ``list[str]``.  Unknown / empty / malformed files yield ``{}`` (graceful
+    degradation — a broken dictionary is skipped, not fatal)."""
+    suffix = path.suffix.lower()
 
     try:
         with open(path, encoding="utf-8") as fh:
-            data = json.load(fh) or {}
-    except (FileNotFoundError, json.JSONDecodeError):
+            if suffix == ".json":
+                raw = json.load(fh) or {}
+            else:  # .yaml / .yml
+                raw = yaml.safe_load(fh) or {}
+    except (FileNotFoundError, json.JSONDecodeError, yaml.YAMLError):
         return {}
 
-    return {str(key): [str(value)] for key, value in data.items()}
+    if not isinstance(raw, dict):
+        return {}
+
+    result: dict[str, list[str]] = {}
+    for key, value in raw.items():
+        k = str(key)
+        if isinstance(value, list):
+            result[k] = [str(v) for v in value]
+        elif value is not None:
+            result[k] = [str(value)]
+    return result
 
 
 class DictTermExpander(TermExpander):
     """Case-insensitive whole-phrase lookup of each dictionary key inside the
-    query; every key found has its synonym/expansion list appended to the
-    query (space-joined, no duplicate appends)."""
+    query; every key found has its expansions appended to the query
+    (space-joined, no duplicate appends)."""
 
     def __init__(self, term_dict: dict[str, list[str]]) -> None:
         self._term_dict = term_dict
@@ -71,22 +80,6 @@ class DictTermExpander(TermExpander):
             return query
 
         return query + " " + " ".join(appended)
-
-
-class CompositeTermExpander(TermExpander):
-    """Applies several expanders in sequence (e.g. synonym dictionary +
-    abbreviation dictionary), each appending to the query produced by the
-    previous one. Used to keep both expansion sources pluggable independently
-    while still exposing a single `TermExpander` to `SearchService`."""
-
-    def __init__(self, expanders: list[TermExpander]) -> None:
-        self._expanders = expanders
-
-    def expand(self, query: str) -> str:
-        result = query
-        for expander in self._expanders:
-            result = expander.expand(result)
-        return result
 
 
 def _contains_whole_phrase(text: str, phrase: str) -> bool:

@@ -6,85 +6,507 @@
 <title>sem_search — семантический поиск</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #222; }
-  .container { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
-  h1 { font-size: 24px; margin-bottom: 4px; }
-  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
-  .search-box { display: flex; gap: 8px; margin-bottom: 12px; }
-  .search-box input { flex: 1; padding: 12px 16px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
-  .search-box input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
-  .search-box button { padding: 12px 24px; font-size: 16px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
-  .search-box button:hover { background: #4338ca; }
-  .search-box button:disabled { background: #999; cursor: not-allowed; }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; align-items: center; }
-  .controls label { font-size: 13px; color: #555; }
-  .controls select, .controls input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
-  .filters { display: flex; gap: 8px; margin-bottom: 20px; }
-  .filters input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
-  .info { display: flex; gap: 16px; margin-bottom: 16px; font-size: 13px; color: #666; flex-wrap: wrap; }
-  .info span { background: #e8e8e8; padding: 4px 10px; border-radius: 12px; }
-  .error { background: #fee2e2; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
-  .warning { background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 4px; }
-  .result { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 10px; transition: box-shadow .15s; }
-  .result:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-  .result-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-  .result-doc { font-weight: 600; font-size: 14px; color: #4f46e5; }
-  .result-score { font-size: 13px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; }
-  .result-text { font-size: 14px; line-height: 1.5; color: #333; }
-  .result-meta { font-size: 12px; color: #999; margin-top: 6px; }
-  .empty { text-align: center; color: #999; padding: 48px 0; font-size: 15px; }
-  .status { display: flex; gap: 12px; margin-bottom: 24px; }
-  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5; color: #222;
+  }
+
+  /* ── header ────────────────────────────────────────────────────── */
+  .header {
+    background: #fff; border-bottom: 1px solid #e5e5e5;
+    padding: 12px 24px; display: flex; align-items: center;
+    justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .header h1 { font-size: 20px; white-space: nowrap; }
+  .header .subtitle { font-size: 13px; color: #666; }
+
+  .status-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .status-item { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .status-dot.ok { background: #22c55e; }
   .status-dot.err { background: #ef4444; }
-  .loading { opacity: .6; pointer-events: none; }
-  hr { border: none; border-top: 1px solid #e5e5e5; margin: 20px 0; }
+  .status-dot.warn { background: #f59e0b; }
+
+  /* ── two-panel grid ─────────────────────────────────────────────── */
+  .panels {
+    display: grid;
+    grid-template-columns: 410px 1fr;
+    height: calc(100vh - 62px);
+    overflow: hidden;
+  }
+
+  .panel {
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+
+  .panel-left  { background: #fafafa; border-right: 1px solid #e5e5e5; }
+  .panel-right { background: #fff; }
+
+  /* ── shared card style ──────────────────────────────────────────── */
+  .card {
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .card-header {
+    font-size: 13px; font-weight: 700; color: #444;
+    margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  }
+  .card-header .icon { font-size: 15px; }
+
+  .field { margin-bottom: 8px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: block; font-size: 11px; font-weight: 600; color: #888;
+    text-transform: uppercase; margin-bottom: 3px;
+  }
+  .field input, .field select {
+    width: 100%; padding: 7px 10px; font-size: 13px;
+    border: 1px solid #d4d4d4; border-radius: 6px; outline: none;
+    background: #fafafa; color: #333;
+  }
+  .field input:focus, .field select:focus {
+    border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,.12);
+    background: #fff;
+  }
+  .field input:disabled, .field select:disabled {
+    background: #f0f0f0; color: #999; cursor: not-allowed;
+  }
+  .field input[type="checkbox"] {
+    width: auto; accent-color: #4f46e5;
+  }
+  .field input[type="file"] {
+    padding: 5px 0; border: none; background: transparent; font-size: 12px;
+  }
+  .field .checkbox-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .field .checkbox-row label {
+    margin-bottom: 0; text-transform: none; font-size: 13px;
+    font-weight: 400; color: #333;
+  }
+
+  .field-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+
+  /* ── tabs ───────────────────────────────────────────────────────── */
+  .tabs { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 2px solid #e5e5e5; }
+  .tab {
+    padding: 7px 14px; font-size: 12px; font-weight: 600;
+    border: none; background: none; color: #888; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+  }
+  .tab:hover { color: #4f46e5; }
+  .tab.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
+  /* ── corpus table ───────────────────────────────────────────────── */
+  .corpus-list { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .corpus-list th {
+    text-align: left; font-size: 10px; font-weight: 700; color: #999;
+    text-transform: uppercase; padding: 5px 6px; border-bottom: 1px solid #e5e5e5;
+  }
+  .corpus-list td {
+    padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle;
+  }
+  .corpus-list tr:hover td { background: #f9f9ff; }
+  .corpus-list tr.row-expandable { cursor: pointer; }
+  .corpus-list .corpus-name { font-weight: 600; color: #4f46e5; }
+  .corpus-list .corpus-meta { color: #888; }
+  .corpus-list .corpus-active { color: #22c55e; font-weight: 600; }
+  .corpus-btn {
+    padding: 3px 8px; font-size: 10px; border: 1px solid #d4d4d4;
+    border-radius: 4px; cursor: pointer; background: #fff; color: #555;
+    white-space: nowrap;
+  }
+  .corpus-btn:hover { background: #f0f0f0; }
+  .corpus-btn.primary { background: #4f46e5; color: #fff; border-color: #4f46e5; font-size: 10px; }
+  .corpus-btn.primary:hover { background: #4338ca; }
+  .corpus-btn.danger { background: #fff; color: #dc2626; border-color: #fca5a5; font-size: 12px; padding: 2px 7px; }
+  .corpus-btn.danger:hover { background: #fef2f2; }
+
+  /* expandable doc list inside corpus row */
+  .doc-sublist { background: #fafafa; }
+  .doc-sublist td { padding: 4px 8px 4px 24px; max-width: 0; }
+  .doc-item { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #eee; gap: 6px; }
+  .doc-info { flex: 1; min-width: 0; overflow: hidden; }
+  .doc-info .doc-id { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .doc-preview { font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .expand-arrow { display: inline-block; transition: transform .15s; margin-right: 4px; font-size: 10px; }
+  .expand-arrow.open { transform: rotate(90deg); }
+  .reindex-note { font-size: 10px; color: #f59e0b; margin-top: 4px; font-style: italic; }
+  /* horizontal scroll fallback for card contents */
+  .card-scroll { overflow-x: auto; }
+
+  /* ── buttons ────────────────────────────────────────────────────── */
+  .btn {
+    padding: 10px 20px; font-size: 14px; border: none; border-radius: 8px;
+    cursor: pointer; font-weight: 600; color: #fff;
+  }
+  .btn-primary { background: #4f46e5; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-primary:disabled { background: #999; cursor: not-allowed; }
+  .btn-green { background: #059669; }
+  .btn-green:hover { background: #047857; }
+  .btn-green:disabled { background: #999; cursor: not-allowed; }
+  .btn-ghost {
+    padding: 8px 16px; font-size: 12px; border: 1px solid #d4d4d4;
+    border-radius: 6px; cursor: pointer; background: #fff; color: #666;
+  }
+  .btn-ghost:hover { background: #f5f5f5; }
+  .btn-ghost:disabled {
+    background: #f0f0f0; color: #bbb; cursor: not-allowed;
+  }
+
+  /* ── search box ─────────────────────────────────────────────────── */
+  .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-row input {
+    flex: 1; padding: 12px 16px; font-size: 16px;
+    border: 1px solid #ccc; border-radius: 8px; outline: none;
+  }
+  .search-row input:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79,70,229,.15);
+  }
+
+  /* ── results ────────────────────────────────────────────────────── */
+  .info-bar {
+    display: flex; gap: 12px; margin-bottom: 12px; font-size: 12px;
+    color: #666; flex-wrap: wrap;
+  }
+  .info-bar span {
+    background: #e8e8e8; padding: 3px 9px; border-radius: 10px;
+  }
+
+  .error-msg {
+    background: #fee2e2; color: #991b1b; padding: 12px 16px;
+    border-radius: 8px; margin-bottom: 12px; font-size: 13px;
+  }
+  .warning-msg {
+    background: #fef3c7; color: #92400e; padding: 8px 12px;
+    border-radius: 6px; font-size: 12px; margin-bottom: 4px;
+  }
+
+  .result {
+    background: #fff; border: 1px solid #e5e5e5; border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 8px;
+    transition: box-shadow .12s;
+  }
+  .result:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .result-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 5px;
+  }
+  .result-doc { font-weight: 600; font-size: 13px; color: #4f46e5; }
+  .result-score {
+    font-size: 12px; color: #888; background: #f0f0f0;
+    padding: 2px 7px; border-radius: 8px;
+  }
+  .result-text { font-size: 13px; line-height: 1.5; color: #333; }
+  .result-meta { font-size: 11px; color: #999; margin-top: 5px; }
+
+  .empty { text-align: center; color: #999; padding: 48px 0; font-size: 14px; }
+
+  hr { border: none; border-top: 1px solid #e5e5e5; margin: 14px 0; }
+
+  details { margin-bottom: 12px; }
+  details summary {
+    cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px;
+  }
+
+  /* ── placeholder badge ──────────────────────────────────────────── */
+  .placeholder-badge {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    background: #fef3c7; color: #92400e; padding: 1px 6px;
+    border-radius: 8px; vertical-align: middle; margin-left: 4px;
+  }
+
+  /* ── responsive ─────────────────────────────────────────────────── */
+  @media (max-width: 960px) {
+    .panels { grid-template-columns: 1fr; }
+    .panel-left { border-right: none; border-bottom: 1px solid #e5e5e5; }
+  }
 </style>
 </head>
 <body>
-<div class="container">
 
-  <h1>&#x1F50D; sem_search</h1>
-  <p class="subtitle">Семантическая поисковая система для русскоязычных текстов</p>
+<!-- ================================================================= -->
+<!-- HEADER                                                             -->
+<!-- ================================================================= -->
+<div class="header">
+  <div>
+    <h1>&#x1F50D; sem_search</h1>
+    <p class="subtitle">Семантическая поисковая система для русскоязычных текстов</p>
+  </div>
+</div>
 
-  <div class="status" id="status">
-    <span id="status-vec">&#x2022; vector_store</span>
-    <span id="status-emb">&#x2022; embedder</span>
-    <span id="status-rerank">&#x2022; reranker</span>
-    <span id="status-ver"></span>
+<!-- ================================================================= -->
+<!-- TWO PANELS                                                        -->
+<!-- ================================================================= -->
+<div class="panels">
+
+<!-- ── LEFT PANEL: Settings ──────────────────────────────────────── -->
+<div class="panel panel-left">
+
+  <!-- Embedder -->
+  <div class="card">
+    <div class="card-header"><span class="icon">&#x1F6E0;</span> Embedder (модель эмбеддингов)</div>
+    <div class="field">
+      <label>Модель</label>
+      <input id="cfg-emb-model" type="text" disabled>
+    </div>
+    <div class="field">
+      <label>Устройство</label>
+      <input id="cfg-emb-device" type="text" disabled>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>query_prefix</label>
+        <input id="cfg-emb-qprefix" type="text" disabled>
+      </div>
+      <div class="field">
+        <label>passage_prefix</label>
+        <input id="cfg-emb-pprefix" type="text" disabled>
+      </div>
+    </div>
+    <div class="field">
+      <label>Batch size</label>
+      <input id="cfg-emb-batch" type="text" disabled>
+    </div>
   </div>
 
-  <div class="search-box">
-    <input id="query" type="text" placeholder="Введите поисковый запрос..." autofocus
+  <!-- Chunking -->
+  <div class="card">
+    <div class="card-header"><span class="icon">&#x1F4E6;</span> Чанкинг (стратегия разбиения)</div>
+    <div class="field">
+      <label>Стратегия</label>
+      <select id="cfg-chunk-strategy" disabled>
+        <option value="fixed_window">fixed_window</option>
+        <option value="fixed_60">fixed_60</option>
+        <option value="sentence_window">sentence_window</option>
+        <option value="paragraph">paragraph</option>
+      </select>
+    </div>
+    <div id="chunk-params-container"></div>
+  </div>
+
+  <!-- Reranker -->
+  <div class="card">
+    <div class="card-header"><span class="icon">&#x1F3AF;</span> Реранкер (cross-encoder)</div>
+    <div class="field">
+      <div class="checkbox-row">
+        <input type="checkbox" id="cfg-rerank-enabled" disabled>
+        <label for="cfg-rerank-enabled">Включен</label>
+      </div>
+    </div>
+    <div class="field">
+      <label>Модель</label>
+      <input id="cfg-rerank-model" type="text" disabled>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Top N</label>
+        <input id="cfg-rerank-topn" type="text" disabled>
+      </div>
+      <div class="field">
+        <label>Устройство</label>
+        <input id="cfg-rerank-device" type="text" disabled>
+      </div>
+    </div>
+    <div class="field">
+      <label>Batch size</label>
+      <input id="cfg-rerank-batch" type="text" disabled>
+    </div>
+  </div>
+
+  <!-- CORPUS LIST (new) -->
+  <div class="card" style="overflow-x:auto;">
+    <div class="card-header"><span class="icon">&#x1F4DA;</span> Сохранённые корпуса</div>
+    <div id="corpus-list-container">
+      <span style="color:#999;font-size:12px;">Загрузка...</span>
+    </div>
+  </div>
+
+  <!-- Profile (placeholder) -->
+  <div class="card">
+    <div class="card-header"><span class="icon">&#x2699;</span> Профиль конфигурации</div>
+    <div class="field">
+      <label>Профиль <span class="placeholder-badge">заглушка</span></label>
+      <select id="cfg-profile" disabled>
+        <option value="config/config.yaml">config/config.yaml</option>
+        <option value="config/config.resource_saving.yaml">config/config.resource_saving.yaml</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Активная версия индекса</label>
+      <input id="cfg-version" type="text" disabled>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" style="width:100%;" disabled id="btn-apply-settings">
+    &#x1F504; Применить настройки <span class="placeholder-badge">заглушка</span>
+  </button>
+
+  <p style="font-size:11px;color:#bbb;text-align:center;margin-top:8px;">
+    Поля read-only — отображают текущий конфиг из <code>config/*.yaml</code>
+  </p>
+</div>
+
+<!-- ── RIGHT PANEL: Search ────────────────────────────────────────── -->
+<div class="panel panel-right">
+
+  <!-- Search input -->
+  <div class="search-row">
+    <input id="query" type="text" placeholder="Введите поисковый запрос..." autofocus autocomplete="off"
            onkeydown="if(event.key==='Enter')search()">
-    <button id="search-btn" onclick="search()">Найти</button>
+    <button class="btn btn-primary" id="search-btn" onclick="search()">Найти</button>
   </div>
 
-  <div class="controls">
-    <label>Режим:
+  <!-- Mode & Top-K -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <div class="field" style="flex:1;min-width:140px;">
+      <label>Режим поиска</label>
       <select id="mode">
+        <option value="dense_rerank">dense + rerank</option>
         <option value="hybrid_rerank">hybrid + rerank</option>
         <option value="hybrid">hybrid (RRF)</option>
         <option value="dense">dense (семантический)</option>
         <option value="bm25">BM25 (лексический)</option>
       </select>
-    </label>
-    <label>Результатов:
+    </div>
+    <div class="field" style="flex:1;min-width:100px;">
+      <label>Результатов</label>
       <select id="top_k">
         <option value="5">5</option>
         <option value="10" selected>10</option>
         <option value="20">20</option>
         <option value="50">50</option>
       </select>
-    </label>
+    </div>
   </div>
 
-  <div class="filters">
-    <input id="must_contain" type="text" placeholder="Обязательные слова (через запятую)">
-    <input id="must_exclude" type="text" placeholder="Исключаемые слова (через запятую)">
+  <!-- Lexical filters -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+    <div class="field" style="flex:1;">
+      <label>Обязательные слова (через запятую)</label>
+      <input id="must_contain" type="text" placeholder="слово1, слово2">
+    </div>
+    <div class="field" style="flex:1;">
+      <label>Исключаемые слова (через запятую)</label>
+      <input id="must_exclude" type="text" placeholder="слово1, слово2">
+    </div>
   </div>
 
-  <div class="info" id="info" style="display:none">
+  <!-- Dictionaries (working) -->
+  <details>
+  <summary>📖 Словари расширения запроса</summary>
+
+    <div style="margin-top:10px;background:#fafafa;border:1px solid #e5e5e5;border-radius:8px;padding:12px;">
+
+      <!-- Master toggle -->
+      <div class="field" style="margin-bottom:10px;">
+        <div class="checkbox-row">
+          <input type="checkbox" id="dict-enabled" checked onchange="toggleDictionaries(this.checked)" style="accent-color:#4f46e5;">
+          <label for="dict-enabled" style="font-weight:600;font-size:13px;">Расширять запрос по словарям</label>
+        </div>
+      </div>
+
+      <!-- Dictionary list -->
+      <div id="dict-list" style="margin-bottom:8px;font-size:12px;color:#999;">Загрузка...</div>
+
+      <!-- Upload -->
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+        <div class="field" style="flex:1;min-width:180px;">
+          <label>Добавить словарь (.json / .yaml)</label>
+          <input type="file" id="dict-upload-input" accept=".json,.yaml,.yml" onchange="uploadDictionary()" style="font-size:12px;">
+        </div>
+        <div id="dict-upload-status" style="font-size:12px;"></div>
+      </div>
+    </div>
+  </details>
+
+  <hr>
+
+  <!-- ══════════════ INDEXING (REDESIGNED) ══════════════ -->
+  <details open>
+  <summary style="font-weight:600;font-size:13px;cursor:pointer;">
+    &#x1F4C2; Индексация документов
+  </summary>
+
+  <div style="margin-top:10px;background:#fafafa;border:1px solid #e5e5e5;border-radius:8px;padding:14px;">
+
+    <p style="font-size:12px;color:#666;margin-bottom:10px;">
+      Поддерживаются: <b>.txt</b>, <b>.md</b>, <b>.docx</b>, <b>.rtf</b> &middot;
+      Кодировка определяется автоматически.
+    </p>
+
+    <!-- Tabs: folder | files | path -->
+    <div class="tabs" id="index-tabs">
+      <button class="tab active" onclick="switchIndexTab('folder')">📁 Папка</button>
+      <button class="tab" onclick="switchIndexTab('files')">📄 Файлы</button>
+      <button class="tab" onclick="switchIndexTab('path')">📝 Путь вручную</button>
+    </div>
+
+    <!-- Folder picker -->
+    <div id="tab-folder" class="index-tab-content">
+      <div class="field">
+        <label>Выберите папку с документами</label>
+        <input type="file" id="folder-input" webkitdirectory multiple
+               onchange="onFolderSelected(this)" style="font-size:13px;">
+      </div>
+      <div id="folder-files-count" style="font-size:11px;color:#888;margin-bottom:6px;"></div>
+    </div>
+
+    <!-- Files picker -->
+    <div id="tab-files" class="index-tab-content" style="display:none;">
+      <div class="field">
+        <label>Выберите один или несколько файлов</label>
+        <input type="file" id="files-input" multiple
+               onchange="onFilesSelected(this)" style="font-size:13px;"
+               accept=".txt,.md,.docx,.rtf">
+      </div>
+      <div id="files-count" style="font-size:11px;color:#888;margin-bottom:6px;"></div>
+    </div>
+
+    <!-- Manual path -->
+    <div id="tab-path" class="index-tab-content" style="display:none;">
+      <div class="field">
+        <label>Путь к папке на сервере</label>
+        <input id="folder-path" type="text" placeholder="C:\Users\...\папка_с_документами" style="font-size:13px;">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;">
+      <div class="field" style="max-width:220px;">
+        <label>Корпус</label>
+        <select id="source-label-select" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;">
+          <option value="">Загрузка...</option>
+        </select>
+        <input id="source-label-new" type="text" placeholder="Имя нового корпуса" style="display:none;margin-top:4px;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;width:100%;">
+      </div>
+      <div class="field" style="min-width:140px;">
+        <label>Режим</label>
+        <div style="display:flex;gap:10px;padding-top:4px;">
+          <label style="font-size:12px;font-weight:400;color:#333;display:flex;align-items:center;gap:3px;cursor:pointer;">
+            <input type="radio" name="index-mode" value="append" checked style="accent-color:#4f46e5;"> Дополнить
+          </label>
+          <label style="font-size:12px;font-weight:400;color:#333;display:flex;align-items:center;gap:3px;cursor:pointer;">
+            <input type="radio" name="index-mode" value="replace" style="accent-color:#4f46e5;"> Заменить
+          </label>
+        </div>
+      </div>
+      <button class="btn btn-green" id="index-btn" onclick="doIndex()">Индексировать</button>
+    </div>
+
+    <div id="index-result" style="margin-top:10px;font-size:13px;"></div>
+  </div>
+  </details>
+
+  <hr>
+
+  <!-- Info bar -->
+  <div class="info-bar" id="info" style="display:none;">
     <span id="info-mode"></span>
     <span id="info-version"></span>
     <span id="info-time"></span>
@@ -92,67 +514,418 @@
     <span id="info-expanded"></span>
   </div>
 
-  <div id="error" class="error" style="display:none"></div>
+  <!-- Error / Warnings -->
+  <div id="error" class="error-msg" style="display:none"></div>
   <div id="warnings"></div>
 
-  <hr>
-
-  <details>
-  <summary style="cursor:pointer; font-weight:600; font-size:15px; margin-bottom:12px;">
-    &#x1F4C2; Индексация документов из папки
-  </summary>
-
-  <div style="margin-top:12px; background:#fff; border:1px solid #e5e5e5; border-radius:8px; padding:16px;">
-    <p style="font-size:13px;color:#666;margin-bottom:10px;">
-      Поддерживаются: <b>.txt</b>, <b>.md</b>, <b>.docx</b>, <b>.rtf</b> &middot;
-      Кодировка определяется автоматически.
-    </p>
-    <div class="search-box" style="margin-bottom:8px;">
-      <input id="folder-path" type="text" placeholder="C:\Users\...\папка_с_документами"
-             style="font-size:14px;">
-      <button id="index-btn" onclick="indexFolder()" style="background:#059669;">
-        Индексировать
-      </button>
-    </div>
-    <label style="font-size:13px;color:#555;">
-      Метка корпуса: <input id="source-label" value="folder" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:120px;">
-    </label>
-    <div id="index-result" style="margin-top:10px;font-size:13px;"></div>
-  </div>
-  </details>
-
-  <hr>
-
+  <!-- Results -->
   <div id="results"><div class="empty">Введите запрос и нажмите «Найти»</div></div>
 
-  <hr>
-  <p style="font-size:12px;color:#aaa;">
-    <a href="/docs" style="color:#aaa;">Swagger API</a> &middot;
-    <a href="/health" style="color:#aaa;">/health</a> &middot;
-    <a href="/admin/versions" style="color:#aaa;">/admin/versions</a>
-  </p>
+</div><!-- /panel-right -->
+</div><!-- /panels -->
 
-</div>
-
+<!-- ================================================================= -->
+<!-- SCRIPTS                                                           -->
+<!-- ================================================================= -->
 <script>
+// ── Tab switching ───────────────────────────────────────────────────
+let _currentIndexTab = 'folder';
+
+function switchIndexTab(tab) {
+  _currentIndexTab = tab;
+  document.querySelectorAll('#index-tabs .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.index-tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('tab-' + tab).style.display = '';
+  document.querySelector('#index-tabs .tab:nth-' +
+    (tab === 'folder' ? '1' : tab === 'files' ? '2' : '3') + '-child')?.classList.add('active');
+}
+
+// highlight the correct tab button
+document.querySelectorAll('#index-tabs .tab').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('#index-tabs .tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+function onFolderSelected(input) {
+  const n = input.files.length;
+  document.getElementById('folder-files-count').textContent =
+    n ? 'Выбрано файлов: ' + n : '';
+}
+
+function onFilesSelected(input) {
+  const n = input.files.length;
+  document.getElementById('files-count').textContent =
+    n ? 'Выбрано файлов: ' + n : '';
+}
+
+// ── Health check ────────────────────────────────────────────────────
 async function checkHealth() {
   try {
     const r = await fetch('/health');
     const h = await r.json();
-    document.getElementById('status-vec').innerHTML = '<span class="status-dot '+(h.subsystems?.vector_store?'ok':'err')+'"></span> vector_store';
-    document.getElementById('status-emb').innerHTML = '<span class="status-dot '+(h.subsystems?.embedder?'ok':'err')+'"></span> embedder';
-    const rr = h.subsystems?.reranker;
-    const rrOk = rr === true;
-    const rrTxt = rr === 'disabled' ? 'отключён' : rrOk ? 'ok' : 'ошибка';
-    document.getElementById('status-rerank').innerHTML = '<span class="status-dot '+(rrOk?'ok':'err')+'"></span> reranker: '+rrTxt;
     if (h.index_version) {
-      document.getElementById('status-ver').textContent = 'v: '+h.index_version.substring(0,20)+'...';
+      document.getElementById('cfg-version').value = h.index_version;
     }
   } catch(e) {
     console.error('health check failed', e);
   }
 }
 
+// ── Load config ─────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const r = await fetch('/admin/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+
+    document.getElementById('cfg-emb-model').value = cfg.embedding.model_name;
+    document.getElementById('cfg-emb-device').value = cfg.embedding.device;
+    document.getElementById('cfg-emb-qprefix').value = cfg.embedding.query_prefix;
+    document.getElementById('cfg-emb-pprefix').value = cfg.embedding.passage_prefix;
+    document.getElementById('cfg-emb-batch').value = cfg.embedding.batch_size;
+
+    document.getElementById('cfg-chunk-strategy').value = cfg.chunking.strategy;
+    renderChunkParams(cfg.chunking.strategy, cfg.chunking.params);
+
+    document.getElementById('cfg-rerank-enabled').checked = cfg.reranking.enabled;
+    document.getElementById('cfg-rerank-model').value = cfg.reranking.model_name;
+    document.getElementById('cfg-rerank-topn').value = cfg.reranking.top_n;
+    document.getElementById('cfg-rerank-device').value = cfg.reranking.device;
+    document.getElementById('cfg-rerank-batch').value = cfg.reranking.batch_size;
+
+    document.getElementById('cfg-profile').value = cfg.config_profile;
+  } catch(e) {
+    console.error('loadConfig failed', e);
+  }
+}
+
+function renderChunkParams(strategy, params) {
+  const container = document.getElementById('chunk-params-container');
+  let html = '';
+  for (const [key, val] of Object.entries(params)) {
+    if (key === 'unit') continue;
+    html += '<div class="field"><label>' + key + '</label>' +
+            '<input type="text" disabled value="' + val + '"></div>';
+  }
+  container.innerHTML = html;
+}
+
+// ── Corpora list ────────────────────────────────────────────────────
+async function loadCorpora() {
+  const container = document.getElementById('corpus-list-container');
+  try {
+    const r = await fetch('/admin/corpora');
+    if (!r.ok) { container.innerHTML = '<span style="color:#999;">—</span>'; return; }
+    const data = await r.json();
+
+    if (!data.corpora || !data.corpora.length) {
+      container.innerHTML = '<span style="color:#999;font-size:12px;">Нет сохранённых корпусов</span>';
+      return;
+    }
+
+    let html = '<table class="corpus-list"><thead><tr>' +
+      '<th></th><th>Имя</th><th>Док-тов</th><th>Размер</th><th>Изменён</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    for (const c of data.corpora) {
+      const sizeFmt = c.size_bytes > 1_000_000
+        ? (c.size_bytes / 1_000_000).toFixed(1) + ' MB'
+        : c.size_bytes > 1_000
+          ? (c.size_bytes / 1_000).toFixed(0) + ' KB'
+          : c.size_bytes + ' B';
+      const dateFmt = c.last_modified ? c.last_modified.substring(5, 16).replace('T', ' ') : '—';
+      const cid = 'corpus-' + c.name.replace(/[^a-zA-Z0-9]/g, '_');
+
+      html += '<tr class="row-expandable" onclick="toggleCorpusDetail(\'' + cid + '\', \'' + escapeHtml(c.name) + '\')">' +
+        '<td style="width:16px;"><span class="expand-arrow" id="' + cid + '-arrow">▶</span></td>' +
+        '<td><span class="corpus-name">' + escapeHtml(c.name) + '</span></td>' +
+        '<td class="corpus-meta" id="' + cid + '-count">' + c.document_count + '</td>' +
+        '<td class="corpus-meta">' + sizeFmt + '</td>' +
+        '<td class="corpus-meta">' + dateFmt + '</td>' +
+        '<td><button class="corpus-btn primary" onclick="event.stopPropagation();reindexCorpus(\'' + escapeHtml(c.name) + '\')">Реиндекс</button></td>' +
+        '</tr>' +
+        '<tr class="doc-sublist" id="' + cid + '-detail" style="display:none;"><td colspan="6"><span style="color:#999;font-size:11px;">Загрузка...</span></td></tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch(e) {
+    console.error('loadCorpora failed', e);
+  }
+}
+
+// ── Expand / collapse corpus detail ─────────────────────────────────
+let _corpusDetailCache = {};
+
+async function toggleCorpusDetail(cid, name) {
+  const detailRow = document.getElementById(cid + '-detail');
+  const arrow = document.getElementById(cid + '-arrow');
+
+  if (detailRow.style.display !== 'none') {
+    // collapse
+    detailRow.style.display = 'none';
+    if (arrow) arrow.classList.remove('open');
+    return;
+  }
+
+  // expand
+  if (arrow) arrow.classList.add('open');
+  detailRow.style.display = '';
+
+  if (_corpusDetailCache[name]) {
+    detailRow.innerHTML = _corpusDetailCache[name];
+    return;
+  }
+
+  try {
+    const r = await fetch('/admin/corpora/' + encodeURIComponent(name));
+    if (!r.ok) { detailRow.innerHTML = '<td colspan="6"><span style="color:#b91c1c;">Ошибка загрузки</span></td>'; return; }
+    const data = await r.json();
+
+    let listHtml = '<td colspan="6"><div style="max-height:300px;overflow-y:auto;overflow-x:hidden;">';
+    for (const doc of data.documents) {
+      const previewText = escapeHtml(doc.text_preview || '');
+      const shortId = doc.doc_id.length > 40 ? doc.doc_id.substring(0, 38) + '…' : doc.doc_id;
+      listHtml += '<div class="doc-item">' +
+        '<div class="doc-info">' +
+          '<span class="doc-id" title="' + escapeHtml(doc.doc_id) + '">' + escapeHtml(shortId) + ' (' + doc.text_length + ' зн.)</span>' +
+          '<span class="doc-preview">' + previewText + '</span>' +
+        '</div>' +
+        '<button class="corpus-btn danger" onclick="event.stopPropagation();deleteDocument(\'' + escapeHtml(name) + '\',\'' + escapeHtml(doc.doc_id) + '\')">Удалить</button>' +
+        '</div>';
+    }
+    listHtml += '</div></td>';
+    _corpusDetailCache[name] = listHtml;
+    detailRow.innerHTML = listHtml;
+  } catch(e) {
+    detailRow.innerHTML = '<td colspan="6"><span style="color:#b91c1c;">Ошибка: ' + e.message + '</span></td>';
+  }
+}
+
+// ── Delete document from corpus ─────────────────────────────────────
+async function deleteDocument(corpusName, docId) {
+  if (!confirm('Удалить «' + docId + '» из корпуса «' + corpusName + '»?\n\nВекторы останутся в индексе до следующей переиндексации.')) return;
+
+  try {
+    const r = await fetch('/admin/corpora/' + encodeURIComponent(corpusName) + '/documents/' + encodeURIComponent(docId), {
+      method: 'DELETE',
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      alert('Ошибка: ' + (err.detail || r.statusText));
+      return;
+    }
+    const result = await r.json();
+
+    // Clear cache so next expand reloads fresh data
+    delete _corpusDetailCache[corpusName];
+
+    // Update count in the table
+    const cid = 'corpus-' + corpusName.replace(/[^a-zA-Z0-9]/g, '_');
+    const countEl = document.getElementById(cid + '-count');
+    const remaining = parseInt(result.message.match(/Осталось (\d+) док/)?.[1] || '0');
+
+    // Reload the detail view if open
+    const detailRow = document.getElementById(cid + '-detail');
+    if (detailRow && detailRow.style.display !== 'none') {
+      _corpusDetailCache[corpusName] = null;
+      toggleCorpusDetail(cid, corpusName);
+    }
+
+    // Refresh corpus list (updates count)
+    setTimeout(loadCorpora, 300);
+
+    // Show reindex note
+    const resultDiv = document.getElementById('index-result');
+    resultDiv.innerHTML = '<span style="color:#f59e0b;">⚠ ' + result.message + '</span>';
+  } catch(e) {
+    alert('Сетевая ошибка: ' + e.message);
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function reindexCorpus(corpusName) {
+  const resultDiv = document.getElementById('index-result');
+  resultDiv.innerHTML = '<span style="color:#888;">⏳ Переиндексация <b>' + escapeHtml(corpusName) + '</b>...</span>';
+  try {
+    const r = await fetch('/reindex', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_corpus: corpusName}),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ ' + (err.detail || r.statusText) + '</span>';
+      return;
+    }
+    const data = await r.json();
+    // Clear detail cache after reindex
+    _corpusDetailCache = {};
+    resultDiv.innerHTML = '<span style="color:#059669;">✅ Переиндексировано: <b>' + data.document_count + '</b> документов, <b>' + data.chunk_count + '</b> чанков</span>';
+    setTimeout(checkHealth, 500);
+    setTimeout(loadCorpora, 600);
+  } catch(e) {
+    resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ ' + e.message + '</span>';
+  }
+}
+
+// ── Corpus select ────────────────────────────────────────────────────
+async function populateCorpusSelect() {
+  const select = document.getElementById('source-label-select');
+  const newInput = document.getElementById('source-label-new');
+  try {
+    const r = await fetch('/admin/corpora');
+    if (!r.ok) return;
+    const data = await r.json();
+    select.innerHTML = '';
+    for (const c of (data.corpora || [])) {
+      const opt = document.createElement('option');
+      opt.value = c.name;
+      opt.textContent = c.name + ' (' + c.document_count + ' док.)';
+      select.appendChild(opt);
+    }
+    const createOpt = document.createElement('option');
+    createOpt.value = '__new__';
+    createOpt.textContent = '+ Создать новый корпус...';
+    select.appendChild(createOpt);
+
+    // Default to first existing corpus if available
+    if (data.corpora && data.corpora.length > 0) {
+      select.value = data.corpora[0].name;
+    }
+
+    select.onchange = function() {
+      if (select.value === '__new__') {
+        newInput.style.display = '';
+        newInput.focus();
+      } else {
+        newInput.style.display = 'none';
+      }
+    };
+  } catch(e) {
+    console.error('populateCorpusSelect failed', e);
+  }
+}
+
+function getSourceLabel() {
+  const select = document.getElementById('source-label-select');
+  if (select.value === '__new__') {
+    return document.getElementById('source-label-new').value.trim() || 'upload';
+  }
+  return select.value || 'upload';
+}
+
+// ── Indexing ────────────────────────────────────────────────────────
+async function doIndex() {
+  const resultDiv = document.getElementById('index-result');
+  const btn = document.getElementById('index-btn');
+  const sourceLabel = getSourceLabel();
+  const modeRadio = document.querySelector('input[name="index-mode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'append';
+
+  // Determine which method to use
+  if (_currentIndexTab === 'path') {
+    // Server-side path — use existing endpoint
+    const folderPath = document.getElementById('folder-path').value.trim();
+    if (!folderPath) {
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Укажите путь к папке</span>';
+      return;
+    }
+    await indexByPath(folderPath, sourceLabel, mode, btn, resultDiv);
+  } else {
+    // Browser upload — folder or files
+    const inputId = _currentIndexTab === 'folder' ? 'folder-input' : 'files-input';
+    const input = document.getElementById(inputId);
+    if (!input.files.length) {
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Выберите файлы</span>';
+      return;
+    }
+    await indexByUpload(input.files, sourceLabel, mode, btn, resultDiv);
+  }
+}
+
+async function indexByPath(folderPath, sourceLabel, mode, btn, resultDiv) {
+  btn.disabled = true; btn.textContent = 'Индексирую...';
+  resultDiv.innerHTML = '<span style="color:#888;">⏳ Сканирую папку...</span>';
+
+  try {
+    const r = await fetch('/index-from-folder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({folder_path: folderPath, source_label: sourceLabel, mode: mode}),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      const detail = typeof err.detail === 'object' ? JSON.stringify(err.detail, null, 2) : err.detail;
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Ошибка: ' + detail + '</span>';
+      return;
+    }
+    const data = await r.json();
+    showIndexSuccess(data, resultDiv);
+    setTimeout(checkHealth, 500);
+    setTimeout(loadCorpora, 600);
+  } catch(e) {
+    resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Индексировать';
+  }
+}
+
+async function indexByUpload(fileList, sourceLabel, mode, btn, resultDiv) {
+  btn.disabled = true; btn.textContent = 'Индексирую...';
+  resultDiv.innerHTML = '<span style="color:#888;">⏳ Загружаю ' + fileList.length + ' файлов...</span>';
+
+  const formData = new FormData();
+  for (const f of fileList) {
+    formData.append('files', f, f.webkitRelativePath || f.name);
+  }
+  formData.append('source_label', sourceLabel);
+  formData.append('mode', mode);
+
+  try {
+    const r = await fetch('/index-upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      const detail = typeof err.detail === 'object' ? JSON.stringify(err.detail, null, 2) : err.detail;
+      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Ошибка: ' + detail + '</span>';
+      return;
+    }
+    const data = await r.json();
+    showIndexSuccess(data, resultDiv);
+    setTimeout(checkHealth, 500);
+    setTimeout(loadCorpora, 600);
+  } catch(e) {
+    resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Индексировать';
+  }
+}
+
+function showIndexSuccess(data, resultDiv) {
+  let html = '<span style="color:#059669;">✅ Проиндексировано: <b>' + data.documents_indexed + '</b> документов, <b>' + data.chunk_count + '</b> чанков</span>';
+  html += '<br><span style="color:#888;">Версия: ' + data.index_version.substring(0, 24) + '...</span>';
+  if (data.errors && data.errors.length) {
+    html += '<br><br><span style="color:#b91c1c;">⚠ Ошибки (' + data.errors.length + ' файлов):</span>';
+    html += '<ul style="margin-top:4px;color:#888;">';
+    for (const e of data.errors) {
+      html += '<li><b>' + (e.path.split('\\').pop() || e.path) + '</b>: ' + e.error + '</li>';
+    }
+    html += '</ul>';
+  }
+  resultDiv.innerHTML = html;
+}
+
+// ── Search ──────────────────────────────────────────────────────────
 async function search() {
   const btn = document.getElementById('search-btn');
   const errDiv = document.getElementById('error');
@@ -199,7 +972,6 @@ async function search() {
 
     const data = await r.json();
 
-    // Info bar
     infoDiv.style.display = 'flex';
     document.getElementById('info-mode').textContent = 'режим: '+data.mode;
     document.getElementById('info-version').textContent = 'версия: '+(data.index_version||'—').substring(0,20)+'...';
@@ -209,12 +981,10 @@ async function search() {
     document.getElementById('info-expanded').textContent = data.expanded_query ? 'расширен: '+data.expanded_query : '';
     document.getElementById('info-expanded').style.display = data.expanded_query ? '' : 'none';
 
-    // Warnings
     if (data.warnings && data.warnings.length) {
-      warningsDiv.innerHTML = data.warnings.map(w => '<div class="warning">&#x26A0; '+w+'</div>').join('');
+      warningsDiv.innerHTML = data.warnings.map(w => '<div class="warning-msg">&#x26A0; '+w+'</div>').join('');
     }
 
-    // Results
     if (!data.hits || !data.hits.length) {
       resultsDiv.innerHTML = '<div class="empty">Ничего не найдено</div>';
       return;
@@ -240,58 +1010,88 @@ async function search() {
   }
 }
 
-async function indexFolder() {
-  const btn = document.getElementById('index-btn');
-  const resultDiv = document.getElementById('index-result');
-  const folderPath = document.getElementById('folder-path').value.trim();
-  if (!folderPath) return;
-
-  btn.disabled = true;
-  btn.textContent = 'Индексирую...';
-  resultDiv.innerHTML = '<span style="color:#888;">⏳ Сканирую папку...</span>';
-
+// ── Dictionaries ────────────────────────────────────────────────────
+async function loadDictionaries() {
+  const listEl = document.getElementById('dict-list');
   try {
-    const r = await fetch('/index-from-folder', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        folder_path: folderPath,
-        source_label: document.getElementById('source-label').value || 'folder',
-      }),
-    });
+    const r = await fetch('/admin/dictionaries');
+    if (!r.ok) { listEl.innerHTML = '<span style="color:#999;">—</span>'; return; }
+    const data = await r.json();
 
-    if (!r.ok) {
-      const err = await r.json();
-      const detail = typeof err.detail === 'object' ? JSON.stringify(err.detail, null, 2) : err.detail;
-      resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Ошибка: '+detail+'</span>';
+    document.getElementById('dict-enabled').checked = data.enabled;
+
+    if (!data.dictionaries || !data.dictionaries.length) {
+      listEl.innerHTML = '<span style="color:#999;">Нет подключённых словарей. Добавьте .json или .yaml файл.</span>';
       return;
     }
 
-    const data = await r.json();
-    let html = '<span style="color:#059669;">✅ Проиндексировано: <b>'+data.documents_indexed+'</b> документов, <b>'+data.chunk_count+'</b> чанков</span>';
-    html += '<br><span style="color:#888;">Версия: '+data.index_version.substring(0,24)+'...</span>';
-
-    if (data.errors && data.errors.length) {
-      html += '<br><br><span style="color:#b91c1c;">⚠ Ошибки при чтении ('+data.errors.length+' файлов):</span>';
-      html += '<ul style="margin-top:4px;color:#888;">';
-      for (const e of data.errors) {
-        html += '<li><b>'+e.path.split('\\').pop()+'</b>: '+e.error+'</li>';
-      }
-      html += '</ul>';
+    let html = '';
+    for (const d of data.dictionaries) {
+      const sizeFmt = d.size_bytes > 1000 ? (d.size_bytes/1000).toFixed(0)+' KB' : d.size_bytes+' B';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee;">' +
+        '<span><b>' + escapeHtml(d.filename) + '</b> — ' + d.entry_count + ' записей, ' + sizeFmt + '</span>' +
+        '<button class="corpus-btn danger" onclick="removeDictionary(\'' + escapeHtml(d.filename) + '\')">✕</button>' +
+        '</div>';
     }
-
-    resultDiv.innerHTML = html;
-    // Refresh health to show new version
-    setTimeout(checkHealth, 500);
+    listEl.innerHTML = html;
   } catch(e) {
-    resultDiv.innerHTML = '<span style="color:#b91c1c;">❌ Сетевая ошибка: '+e.message+'</span>';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Индексировать';
+    console.error('loadDictionaries failed', e);
   }
 }
 
+async function toggleDictionaries(enabled) {
+  try {
+    await fetch('/admin/dictionaries/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: enabled}),
+    });
+  } catch(e) {
+    console.error('toggleDictionaries failed', e);
+  }
+}
+
+async function uploadDictionary() {
+  const input = document.getElementById('dict-upload-input');
+  const status = document.getElementById('dict-upload-status');
+  if (!input.files.length) return;
+
+  const formData = new FormData();
+  formData.append('file', input.files[0]);
+
+  status.innerHTML = '<span style="color:#888;">Загружаю...</span>';
+  try {
+    const r = await fetch('/admin/dictionaries/upload', {method: 'POST', body: formData});
+    if (!r.ok) {
+      const err = await r.json();
+      status.innerHTML = '<span style="color:#b91c1c;">❌ ' + (err.detail || 'Ошибка') + '</span>';
+      return;
+    }
+    const data = await r.json();
+    status.innerHTML = '<span style="color:#059669;">✅ ' + data.uploaded + ' добавлен</span>';
+    input.value = '';
+    loadDictionaries();
+  } catch(e) {
+    status.innerHTML = '<span style="color:#b91c1c;">❌ ' + e.message + '</span>';
+  }
+}
+
+async function removeDictionary(filename) {
+  if (!confirm('Удалить словарь «' + filename + '»?')) return;
+  try {
+    await fetch('/admin/dictionaries/' + encodeURIComponent(filename), {method: 'DELETE'});
+    loadDictionaries();
+  } catch(e) {
+    console.error('removeDictionary failed', e);
+  }
+}
+
+// ── Startup ─────────────────────────────────────────────────────────
 checkHealth();
+loadConfig();
+loadCorpora();
+populateCorpusSelect();
+loadDictionaries();
 </script>
 </body>
 </html>

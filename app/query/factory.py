@@ -2,14 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.config import QueryProcessingConfig, TermExpansionConfig, TypoCorrectionConfig
+from app.config import QueryProcessingConfig, TypoCorrectionConfig
 from app.query.base import TermExpander, TypoCorrector
-from app.query.term_expansion import (
-    CompositeTermExpander,
-    DictTermExpander,
-    load_abbrev_dictionary,
-    load_term_dictionary,
-)
+from app.query.term_expansion import DictTermExpander, load_dictionary
 from app.query.typo_correction import RapidfuzzTypoCorrector
 
 
@@ -22,44 +17,32 @@ def build_typo_corrector(cfg: TypoCorrectionConfig) -> TypoCorrector | None:
     return RapidfuzzTypoCorrector(max_distance=cfg.max_distance, score_cutoff=cfg.score_cutoff)
 
 
-def build_term_expander(cfg: TermExpansionConfig) -> TermExpander | None:
-    """`None` when disabled; otherwise loads the dictionary from
-    `cfg.dictionary_path` up front (once, at build time -- not per-request)."""
-
-    if not cfg.enabled:
-        return None
-    term_dict = load_term_dictionary(Path(cfg.dictionary_path))
-    return DictTermExpander(term_dict=term_dict)
-
-
-def build_abbrev_expander(cfg: QueryProcessingConfig) -> TermExpander | None:
-    """Pluggable abbreviation expansion: `None` when
-    `expansion_enabled` is False, otherwise a `DictTermExpander` over the
-    JSON abbreviation dictionary at `abbrev_dict_path`. A missing dictionary
-    yields an (empty) no-op expander rather than an error (graceful)."""
-
-    if not cfg.expansion_enabled:
-        return None
-    abbrev_dict = load_abbrev_dictionary(Path(cfg.abbrev_dict_path))
-    return DictTermExpander(term_dict=abbrev_dict)
-
-
 def build_query_expander(cfg: QueryProcessingConfig) -> TermExpander | None:
-    """Combines the (synonym) term expander and the (abbreviation) expander,
-    each independently toggleable via config. Returns `None` when both are
-    disabled, a single expander when only one is active, or a
-    `CompositeTermExpander` applying both in sequence."""
+    """Scans ``dictionaries_dir`` for ``.json`` / ``.yaml`` files, loads each
+    as a ``{word: [expansions]}`` dictionary, and returns a single
+    ``DictTermExpander`` over the merged result.
 
-    expanders = [
-        expander
-        for expander in (
-            build_term_expander(cfg.term_expansion),
-            build_abbrev_expander(cfg),
-        )
-        if expander is not None
-    ]
-    if not expanders:
+    Returns ``None`` when ``dictionaries_enabled`` is False or the directory
+    contains no parseable dictionaries, so ``SearchService`` can skip the
+    expansion step entirely.
+    """
+    if not cfg.dictionaries_enabled:
         return None
-    if len(expanders) == 1:
-        return expanders[0]
-    return CompositeTermExpander(expanders)
+
+    dir_path = Path(cfg.dictionaries_dir)
+    if not dir_path.is_dir():
+        return None
+
+    merged: dict[str, list[str]] = {}
+    for file_path in sorted(dir_path.glob("*")):
+        if file_path.suffix.lower() not in (".json", ".yaml", ".yml"):
+            continue
+        d = load_dictionary(file_path)
+        for key, expansions in d.items():
+            merged.setdefault(key, []).extend(
+                e for e in expansions if e not in merged.get(key, [])
+            )
+
+    if not merged:
+        return None
+    return DictTermExpander(term_dict=merged)

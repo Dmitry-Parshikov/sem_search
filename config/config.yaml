@@ -11,10 +11,10 @@ app:
 
 embedding:
   model_name: "deepvk/USER2-base"
-  device: "cpu"
+  device: "cuda"
   batch_size: 32
-  query_prefix: "classification: "
-  passage_prefix: "classification: "
+  query_prefix: "search_query: "
+  passage_prefix: "search_document: "
 
 chunking:
   strategy: "fixed_60"
@@ -62,7 +62,7 @@ hybridization:
 reranking:
   enabled: true
   model_name: "BAAI/bge-reranker-v2-m3"
-  device: "cpu"
+  device: "cuda"
   top_n: 20
   batch_size: 16
 
@@ -71,11 +71,11 @@ query_processing:
     enabled: true
     max_distance: 2
     score_cutoff: 80.0
-  term_expansion:
-    enabled: true
-    dictionary_path: "./config/terms_dictionary.yaml"
-  expansion_enabled: true
-  abbrev_dict_path: "./data/abbrev_dict.json"
+  # Унифицированные словари расширения запроса.
+  # Каждый .json / .yaml файл в dictionaries_dir загружается как словарь.
+  # Формат: "слово": "расширение" или "слово": ["расширение1", "расширение2"].
+  dictionaries_enabled: true
+  dictionaries_dir: "./data/dictionaries"
 
 search:
   default_mode: "dense"
